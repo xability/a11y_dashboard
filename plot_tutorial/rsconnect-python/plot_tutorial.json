@@ -2,8 +2,8 @@
     "https://api.shinyapps.io": {
         "server_url": "https://api.shinyapps.io",
         "filename": "C:\\a11y_dashboard\\plot_tutorial",
-        "app_url": "https://xabilitylab.shinyapps.io/plot_tutorial1/",
-        "app_id": 12668525,
+        "app_url": "https://xabilitylab.shinyapps.io/plot_tutorial/",
+        "app_id": 12669088,
         "app_guid": null,
         "title": "plot_tutorial",
         "app_mode": "python-shiny",
