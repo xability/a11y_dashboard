@@ -1,8 +1,0 @@
-shiny
-seaborn
-pandas
-maidr
-numpy
-shinywidgets
-matplotlib
-plotly
