@@ -1,7 +1,9 @@
 import seaborn as sns
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from shiny import App, ui, render
+from shiny import App, ui, render, reactive
+from shiny.types import FileInfo
 from maidr.widget.shiny import render_maidr
 
 # Set random seed
@@ -18,20 +20,11 @@ color_palettes = {
 }
 
 # Define the UI components for the Shiny application with tabs and sidebar
-app_ui = ui.page_sidebar(
-    ui.sidebar(
-        ui.input_radio_buttons(
-            "theme",
-            "Select theme:",
-            choices=["Light", "Dark"],
-            selected="Light"
-        ),
-        width=2
-    ),
+app_ui = ui.page_fluid(
     ui.navset_tab(
         # First tab: Histogram with dropdowns and plot
         ui.nav_panel(
-            "Histogram",
+            "Tutorial - Histogram",
             ui.input_select(
                 "distribution_type",
                 "Select histogram distribution type:",
@@ -55,7 +48,7 @@ app_ui = ui.page_sidebar(
         ),
         # Second tab: Box Plot with dropdowns and plot
         ui.nav_panel(
-            "Box Plot",
+            "Tutorial - Box Plot",
             ui.input_select(
                 "boxplot_type",
                 "Select box plot type:",
@@ -77,7 +70,7 @@ app_ui = ui.page_sidebar(
         ),
         # Third tab: Scatter Plot with dropdowns and plot
         ui.nav_panel(
-            "Scatter Plot",
+            "Tutorial - Scatter Plot",
             ui.input_select(
                 "scatterplot_type",
                 "Select scatter plot type:",
@@ -97,14 +90,37 @@ app_ui = ui.page_sidebar(
                 selected="Default"
             ),
             ui.output_ui("create_scatterplot"),
+        ),
+
+        # Fourth tab: Practice tab with file upload, data types, and custom plot creation
+        ui.nav_panel(
+            "Practice",
+            ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
+            ui.output_table("data_types"),
+            ui.input_select(
+                "plot_type",
+                "Select plot type:",
+                choices=["", "Histogram", "Box Plot", "Scatter Plot"],
+                selected=""
+            ),
+            ui.input_select(
+                "plot_color",
+                "Select plot color:",
+                choices=list(color_palettes.keys()),  # Dropdown for color selection
+                selected="Default"
+            ),
+            ui.output_ui("variable_input"),
+            ui.output_ui("create_custom_plot")
         )
     )
 )
 
-# Define the server logic for generating histograms, box plots, and scatter plots
+# Define the server logic for generating histograms, box plots, scatter plots, and handling the Practice tab
 def server(input, output, session):
+    uploaded_data = reactive.Value(None)
+
     def set_theme(fig, ax):
-        theme = input.theme()
+        theme = input.theme() if "theme" in input else "Light"
         if theme == "Dark":
             plt.style.use('dark_background')
             fig.patch.set_facecolor('#2E2E2E')
@@ -114,6 +130,8 @@ def server(input, output, session):
             fig.patch.set_facecolor('white')
             ax.set_facecolor('white')
 
+    # Tutorial - Histogram Plot
+    @output
     @render_maidr
     def create_histogram():
         distribution_type = input.distribution_type()
@@ -125,7 +143,7 @@ def server(input, output, session):
         elif distribution_type == "Positively Skewed":
             data = np.random.exponential(scale=3, size=1000)
         elif distribution_type == "Negatively Skewed":
-            data = -np.random.exponential(scale=1.5, size=1000)  # Modified to increase skew
+            data = -np.random.exponential(scale=1.5, size=1000)
         elif distribution_type == "Unimodal Distribution":
             data = np.random.normal(loc=0, scale=2.5, size=1000)
         elif distribution_type == "Bimodal Distribution":
@@ -143,8 +161,10 @@ def server(input, output, session):
         ax.set_xlabel("Value")
         ax.set_ylabel("Frequency")
         
-        return ax  # Return the figure
+        return ax
 
+    # Tutorial - Box Plot
+    @output
     @render_maidr
     def create_boxplot():
         boxplot_type = input.boxplot_type()
@@ -154,46 +174,31 @@ def server(input, output, session):
         if boxplot_type == "Positively Skewed with Outliers":
             data = np.random.lognormal(mean=0, sigma=0.5, size=1000)
         elif boxplot_type == "Negatively Skewed with Outliers":
-            data = -np.random.lognormal(mean=0, sigma=0.5, size=1000)  # More pronounced negative skew
+            data = -np.random.lognormal(mean=0, sigma=0.5, size=1000)
         elif boxplot_type == "Symmetric with Outliers":
             data = np.random.normal(loc=0, scale=1, size=1000)
         elif boxplot_type == "Symmetric without Outliers":
-            # Ensure no outliers by limiting range of data
             data = np.random.normal(loc=0, scale=1, size=1000)
             data = data[(data > -1.5) & (data < 1.5)]  # Strict range to avoid outliers
         else:
             data = np.random.normal(loc=0, scale=1, size=1000)
 
-        # Calculate the IQR for outlier detection (only relevant for cases with outliers)
-        q1 = np.percentile(data, 25)
-        q3 = np.percentile(data, 75)
-        iqr = q3 - q1
-        upper_bound = q3 + 1.5 * iqr
-        lower_bound = q1 - 1.5 * iqr
-
-        # Identify the outliers only for types that should have them
-        if "Outliers" in boxplot_type:
-            outliers = data[(data > upper_bound) | (data < lower_bound)]
-            if len(outliers) > 5:
-                outliers = outliers[:5]  # Limit to first 5 outliers
-            data = np.clip(data, lower_bound, upper_bound)  # Cap the rest of the data
-            data = np.concatenate([data, outliers])  # Add the outliers back into the dataset
-
         # Create the plot using matplotlib
         fig, ax = plt.subplots(figsize=(10, 6))
         set_theme(fig, ax)
-        sns.boxplot(x=data, ax=ax, color=color)
+        sns.boxplot(x=data, ax=ax, color=color)  # Horizontal box plot
         ax.set_title(f"Box Plot: {boxplot_type}")
         ax.set_xlabel("Value")
         
         return ax
 
+    # Tutorial - Scatter Plot
+    @output
     @render_maidr
     def create_scatterplot():
         scatterplot_type = input.scatterplot_type()
         color = color_palettes[input.scatter_color()]
 
-        # Generate data for scatter plot based on the selected correlation type
         num_points = np.random.randint(20, 31)  # Randomly select between 20 and 30 points
         if scatterplot_type == "No Correlation":
             x = np.random.uniform(size=num_points)
@@ -220,6 +225,99 @@ def server(input, output, session):
         ax.set_ylabel("Y")
         
         return ax
+
+    # Practice Tab Logic
+    @reactive.Effect
+    @reactive.event(input.file_upload)
+    def _():
+        file: list[FileInfo] = input.file_upload()
+        if file and len(file) > 0:
+            uploaded_data.set(pd.read_csv(file[0]["datapath"]))
+
+    @output
+    @render.table
+    def data_types():
+        df = uploaded_data.get()
+        if df is not None:
+            data_summary = pd.DataFrame({
+                'Variable': df.columns,
+                'Data Type': df.dtypes.astype(str).replace(
+                    {'object': 'categorical', 'int64': 'numeric', 'float64': 'numeric'})
+            })
+            return data_summary
+
+    @output
+    @render.ui
+    def variable_input():
+        df = uploaded_data.get()
+        plot_type = input.plot_type()
+
+        if df is not None and plot_type:
+            numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
+            
+            if plot_type == "Histogram" or plot_type == "Box Plot":
+                return ui.input_select(f"var_{plot_type.lower().replace(' ', '_')}", 
+                                       f"Select variable for {plot_type}:", 
+                                       choices=[""] + numeric_vars)
+            elif plot_type == "Scatter Plot":
+                return ui.div(
+                    ui.input_select("var_scatter_x", "Select X variable:", 
+                                    choices=[""] + numeric_vars),
+                    ui.input_select("var_scatter_y", "Select Y variable:", 
+                                    choices=[""] + numeric_vars)
+                )
+        return ui.div()
+
+    @reactive.Effect
+    @reactive.event(input.var_scatter_x)
+    def _():
+        df = uploaded_data.get()
+        if df is not None and input.plot_type() == "Scatter Plot":
+            numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
+            x_var = input.var_scatter_x()
+            y_choices = [""] + [var for var in numeric_vars if var != x_var]
+            ui.update_select("var_scatter_y", choices=y_choices)
+
+    @output
+    @render_maidr
+    def create_custom_plot():
+        df = uploaded_data.get()
+        plot_type = input.plot_type()
+        color = color_palettes[input.plot_color()]  # Get selected color for plot
+
+        if df is None or not plot_type:
+            return None
+
+        try:
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+            if plot_type == "Histogram":
+                var = input.var_histogram()
+                if var:
+                    sns.histplot(data=df, x=var, kde=True, color=color, ax=ax)
+                    ax.set_title(f"Histogram of {var}")
+                    ax.set_xlabel(var.replace("_", " ").title())
+                    ax.set_ylabel("Count")
+            elif plot_type == "Box Plot":
+                var = input.var_box_plot()
+                if var:
+                    sns.boxplot(data=df, x=var, color=color, ax=ax)
+                    ax.set_title(f"Box Plot of {var}")
+                    ax.set_xlabel(var.replace("_", " ").title())
+                    ax.set_ylabel("")
+            elif plot_type == "Scatter Plot":
+                var_x = input.var_scatter_x()
+                var_y = input.var_scatter_y()
+                if var_x and var_y:
+                    sns.scatterplot(data=df, x=var_x, y=var_y, color=color, ax=ax)
+                    ax.set_title(f"Scatter Plot: {var_y} vs {var_x}")
+                    ax.set_xlabel(var_x.replace("_", " ").title())
+                    ax.set_ylabel(var_y.replace("_", " ").title())
+
+            return ax
+        except Exception as e:
+            print(f"Error generating plot: {str(e)}")
+            return None
 
 # Create the app
 app = App(app_ui, server)
