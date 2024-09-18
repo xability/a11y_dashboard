@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "posit.shiny",
+        "posit.shinyuieditor",
+        "posit.publisher",
+        "quarto.quarto"
+    ]
+}

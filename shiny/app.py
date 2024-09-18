@@ -492,7 +492,6 @@ def server(input, output, session):
             return ui.input_select("var_heatmap_y", "Select Y variable:", choices=y_choices)
         return ui.div()
 
-
     @output
     @render_maidr
     def create_custom_plot():
@@ -568,7 +567,6 @@ def server(input, output, session):
                     # # Rotate x-axis labels if there are many categories
                     # if len(pivot_table.columns) > 5:
                     #     plt.xticks(rotation=45, ha='right')
-
             return ax
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
