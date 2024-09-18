@@ -37,11 +37,19 @@ app_ui = ui.page_fluid(
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
             "Practice",
-            ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
-            ui.output_table("data_types"),
-            ui.output_ui("plot_options"),
-            ui.output_ui("variable_input"),
-            ui.output_ui("create_custom_plot")
+            ui.row(
+                # Left column for file upload, table, and conditional dropdowns (50% width)
+                ui.column(6,
+                    ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
+                    ui.output_table("data_types"),
+                    ui.output_ui("plot_options"),  # Conditionally render dropdowns
+                    ui.output_ui("variable_input")  # Variable input for specific plot
+                ),
+                # Right column for the plot (50% width)
+                ui.column(6,
+                    ui.output_ui("create_custom_plot")
+                )
+            )
         ),
 
         # First tab: Histogram with dropdowns and plot
@@ -178,6 +186,27 @@ def server(input, output, session):
             plt.style.use('default')
             fig.patch.set_facecolor('white')
             ax.set_facecolor('white')
+
+    @output
+    @render.ui
+    def plot_options():
+        file = input.file_upload()  # Check if file is uploaded
+        if file and len(file) > 0:  # Only show if file is present
+            return ui.div(
+                ui.input_select(
+                    "plot_type",
+                    "Select plot type:",
+                    choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot"],
+                    selected=""
+                ),
+                ui.input_select(
+                    "plot_color",
+                    "Select plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default"
+                )
+            )
+        return ui.div()  # Return an empty div if no file is uploaded
 
     # Tutorial - Histogram Plot
     @output
