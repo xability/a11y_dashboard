@@ -22,6 +22,28 @@ color_palettes = {
 # Define the UI components for the Shiny application with tabs and sidebar
 app_ui = ui.page_fluid(
     ui.navset_tab(
+        ui.nav_menu(
+            "Settings",
+            ui.nav_control(
+                ui.input_select(
+                    "theme",
+                    "Theme:",
+                    choices=["Light", "Dark"],
+                    selected="Light"
+                )
+            )
+        ),
+
+        # Fifth tab: Practice tab with file upload, data types, and custom plot creation
+        ui.nav_panel(
+            "Practice",
+            ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
+            ui.output_table("data_types"),
+            ui.output_ui("plot_options"),
+            ui.output_ui("variable_input"),
+            ui.output_ui("create_custom_plot")
+        ),
+
         # First tab: Histogram with dropdowns and plot
         ui.nav_panel(
             "Tutorial - Histogram",
@@ -46,7 +68,7 @@ app_ui = ui.page_fluid(
             ),
             ui.output_ui("create_histogram"),
         ),
-        # Second tab: Box Plot with dropdowns and plot
+        # Second tab: Box Plot with a single variable for Tutorial
         ui.nav_panel(
             "Tutorial - Box Plot",
             ui.input_select(
@@ -91,36 +113,26 @@ app_ui = ui.page_fluid(
             ),
             ui.output_ui("create_scatterplot"),
         ),
-
-        # Fourth tab: Practice tab with file upload, data types, and custom plot creation
+        # Fourth tab: Bar Plot with dropdowns and plot
         ui.nav_panel(
-            "Practice",
-            ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
-            ui.output_table("data_types"),
+            "Tutorial - Bar Plot",
             ui.input_select(
-                "plot_type",
-                "Select plot type:",
-                choices=["", "Histogram", "Box Plot", "Scatter Plot"],
-                selected=""
-            ),
-            ui.input_select(
-                "plot_color",
-                "Select plot color:",
-                choices=list(color_palettes.keys()),  # Dropdown for color selection
+                "barplot_color",
+                "Select bar plot color:",
+                choices=list(color_palettes.keys()),
                 selected="Default"
             ),
-            ui.output_ui("variable_input"),
-            ui.output_ui("create_custom_plot")
+            ui.output_ui("create_barplot"),
         )
     )
 )
 
-# Define the server logic for generating histograms, box plots, scatter plots, and handling the Practice tab
+# Define the server logic for generating histograms, box plots, scatter plots, bar plots, and handling the Practice tab
 def server(input, output, session):
     uploaded_data = reactive.Value(None)
 
     def set_theme(fig, ax):
-        theme = input.theme() if "theme" in input else "Light"
+        theme = input.theme()
         if theme == "Dark":
             plt.style.use('dark_background')
             fig.patch.set_facecolor('#2E2E2E')
@@ -226,13 +238,38 @@ def server(input, output, session):
         
         return ax
 
+    # Tutorial - Bar Plot
+    @output
+    @render_maidr
+    def create_barplot():
+        color = color_palettes[input.barplot_color()]
+        categories = ["Category A", "Category B", "Category C", "Category D", "Category E"]
+        values = np.random.randint(10, 100, size=5)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_theme(fig, ax)
+        sns.barplot(x=categories, y=values, ax=ax, color=color)
+        ax.set_title("Bar Plot of Categories")
+        ax.set_xlabel("Categories")
+        ax.set_ylabel("Values")
+        
+        return ax
+
     # Practice Tab Logic
     @reactive.Effect
     @reactive.event(input.file_upload)
-    def _():
+    def update_variable_choices():
         file: list[FileInfo] = input.file_upload()
         if file and len(file) > 0:
-            uploaded_data.set(pd.read_csv(file[0]["datapath"]))
+            df = pd.read_csv(file[0]["datapath"])
+            uploaded_data.set(df)
+            numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
+            categorical_vars = df.select_dtypes(include='object').columns.tolist()
+            
+            # Update dropdown choices for box plot in Practice tab
+            ui.update_select("plot_type", choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot"])
+            ui.update_select("var_boxplot_x", choices=[""] + numeric_vars)
+            ui.update_select("var_boxplot_y", choices=[""] + categorical_vars)
 
     @output
     @render.table
@@ -248,17 +285,44 @@ def server(input, output, session):
 
     @output
     @render.ui
+    def plot_options():
+        df = uploaded_data.get()
+        if df is not None:
+            return ui.div(
+                ui.input_select(
+                    "plot_type",
+                    "Select plot type:",
+                    choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot"],
+                    selected=""
+                ),
+                ui.input_select(
+                    "plot_color",
+                    "Select plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default"
+                )
+            )
+        return ui.div()
+
+    @output
+    @render.ui
     def variable_input():
         df = uploaded_data.get()
         plot_type = input.plot_type()
 
         if df is not None and plot_type:
             numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
-            
-            if plot_type == "Histogram" or plot_type == "Box Plot":
-                return ui.input_select(f"var_{plot_type.lower().replace(' ', '_')}", 
-                                       f"Select variable for {plot_type}:", 
+            categorical_vars = df.select_dtypes(include='object').columns.tolist()
+
+            if plot_type == "Histogram" :
+                return ui.input_select("var_histogram", "Select variable for Histogram:", 
                                        choices=[""] + numeric_vars)
+
+            if plot_type == "Box Plot":
+                return ui.div(
+                    ui.input_select("var_boxplot_x", "Select numerical variable for X-axis:", choices=[""] + numeric_vars),
+                    ui.input_select("var_boxplot_y", "Select categorical variable for Y-axis (optional):", choices=[""] + categorical_vars, selected="")
+                )
             elif plot_type == "Scatter Plot":
                 return ui.div(
                     ui.input_select("var_scatter_x", "Select X variable:", 
@@ -266,11 +330,15 @@ def server(input, output, session):
                     ui.input_select("var_scatter_y", "Select Y variable:", 
                                     choices=[""] + numeric_vars)
                 )
+            elif plot_type == "Bar Plot":
+                return ui.input_select(f"var_bar_plot", 
+                                       f"Select variable for Bar Plot:", 
+                                       choices=[""] + categorical_vars)
         return ui.div()
-
+    
     @reactive.Effect
     @reactive.event(input.var_scatter_x)
-    def _():
+    def update_scatter_y_choices():
         df = uploaded_data.get()
         if df is not None and input.plot_type() == "Scatter Plot":
             numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
@@ -278,6 +346,7 @@ def server(input, output, session):
             y_choices = [""] + [var for var in numeric_vars if var != x_var]
             ui.update_select("var_scatter_y", choices=y_choices)
 
+    # Box Plot - If Y variable is not selected, render the plot with X only
     @output
     @render_maidr
     def create_custom_plot():
@@ -290,6 +359,7 @@ def server(input, output, session):
 
         try:
             fig, ax = plt.subplots(figsize=(10, 6))
+            set_theme(fig, ax)
 
             if plot_type == "Histogram":
                 var = input.var_histogram()
@@ -299,12 +369,17 @@ def server(input, output, session):
                     ax.set_xlabel(var.replace("_", " ").title())
                     ax.set_ylabel("Count")
             elif plot_type == "Box Plot":
-                var = input.var_box_plot()
-                if var:
-                    sns.boxplot(data=df, x=var, color=color, ax=ax)
-                    ax.set_title(f"Box Plot of {var}")
-                    ax.set_xlabel(var.replace("_", " ").title())
-                    ax.set_ylabel("")
+                var_x = input.var_boxplot_x()
+                var_y = input.var_boxplot_y()
+                if var_x and var_y:
+                    sns.boxplot(x=var_x, y=var_y, data=df, palette=[color], ax=ax)
+                    ax.set_title(f"Box Plot of {var_x} grouped by {var_y}")
+                    ax.set_xlabel(var_x.replace("_", " ").title())
+                    ax.set_ylabel(var_y.replace("_", " ").title())
+                elif var_x:
+                    sns.boxplot(x=df[var_x], color=color, ax=ax)
+                    ax.set_title(f"Box Plot of {var_x}")
+                    ax.set_xlabel(var_x.replace("_", " ").title())
             elif plot_type == "Scatter Plot":
                 var_x = input.var_scatter_x()
                 var_y = input.var_scatter_y()
@@ -313,11 +388,19 @@ def server(input, output, session):
                     ax.set_title(f"Scatter Plot: {var_y} vs {var_x}")
                     ax.set_xlabel(var_x.replace("_", " ").title())
                     ax.set_ylabel(var_y.replace("_", " ").title())
+            elif plot_type == "Bar Plot":
+                var = input.var_bar_plot()
+                if var:
+                    sns.countplot(data=df, x=var, color=color, ax=ax)
+                    ax.set_title(f"Bar Plot of {var}")
+                    ax.set_xlabel(var.replace("_", " ").title())
+                    ax.set_ylabel("Count")
 
             return ax
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
             return None
+
 
 # Create the app
 app = App(app_ui, server)
