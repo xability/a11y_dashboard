@@ -21,6 +21,19 @@ color_palettes = {
 
 # Define the UI components for the Shiny application with tabs and sidebar
 app_ui = ui.page_fluid(
+    # Head content for custom CSS and JavaScript
+    ui.head_content(
+        ui.tags.style("""
+            body.dark-theme { background-color: #2E2E2E; color: white; }
+            body.light-theme { background-color: white; color: black; }
+        """),
+        ui.tags.script("""
+            Shiny.addCustomMessageHandler("update_theme", function(theme) {
+                document.body.classList.toggle("dark-theme", theme === "Dark");
+                document.body.classList.toggle("light-theme", theme === "Light");
+            });
+        """)
+    ),
     ui.navset_tab(
         ui.nav_menu(
             "Settings",
@@ -175,6 +188,12 @@ app_ui = ui.page_fluid(
 # Define the server logic
 def server(input, output, session):
     uploaded_data = reactive.Value(None)
+
+    # Update the theme based on the selected option
+    @reactive.effect
+    @reactive.event(input.theme)
+    async def update_theme():
+        await session.send_custom_message("update_theme", input.theme())
 
     def set_theme(fig, ax):
         theme = input.theme()
