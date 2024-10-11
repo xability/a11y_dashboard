@@ -184,7 +184,9 @@ def server(input, output, session):
     @render_maidr
     def create_kurtosis_histogram():
         kurtosis_type = input.kurtosis_type()
-        color = color_palettes[input.kurtosis_color()]  # Use the same color for both bars and the trend line
+        color = color_palettes[
+            input.kurtosis_color()
+        ]  # Use the same color for both bars and the trend line
 
         # Generate data and PDF based on the selected kurtosis
         x = np.linspace(-4, 4, 1000)
@@ -192,24 +194,52 @@ def server(input, output, session):
         y_max = 0.9  # Increase y-axis maximum to accommodate the peak
 
         # Create the plot using matplotlib
-        fig, ax = plt.subplots(figsize=(10, 6))  # Create figure and axis BEFORE plotting
+        fig, ax = plt.subplots(
+            figsize=(10, 6)
+        )  # Create figure and axis BEFORE plotting
 
         if kurtosis_type == "Leptokurtic":
             data = np.random.laplace(size=10000)  # Leptokurtic distribution
-            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
+            sns.histplot(
+                data,
+                bins=bins,
+                kde=False,
+                stat="density",
+                ax=ax,
+                color=color,
+                edgecolor="black",
+            )
 
         elif kurtosis_type == "Mesokurtic":
             data = np.random.normal(size=10000)  # Normal distribution for Mesokurtic
-            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
+            sns.histplot(
+                data,
+                bins=bins,
+                kde=False,
+                stat="density",
+                ax=ax,
+                color=color,
+                edgecolor="black",
+            )
 
             # Generate and plot the PDF for the trend line
             pdf = norm.pdf(x)
             ax.plot(x, pdf, color=color, linewidth=2, label="PDF")
 
         else:  # Platykurtic
-            data = beta.rvs(a=2, b=2, size=10000)  # Beta distribution for a flatter peak
+            data = beta.rvs(
+                a=2, b=2, size=10000
+            )  # Beta distribution for a flatter peak
             data = (data - 0.5) * 8  # Scale and center the data to match the range
-            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
+            sns.histplot(
+                data,
+                bins=bins,
+                kde=False,
+                stat="density",
+                ax=ax,
+                color=color,
+                edgecolor="black",
+            )
 
             # Generate and plot the PDF for the trend line
             pdf = beta.pdf((x / 8) + 0.5, a=2, b=2) / 8
@@ -225,6 +255,7 @@ def server(input, output, session):
         set_theme(fig, ax)  # Assuming this is a custom function for styling
 
         return ax
+
 
 # Create the app
 app = App(app_ui, server)
