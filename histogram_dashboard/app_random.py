@@ -2,9 +2,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import random
 from shiny import App, ui, render, reactive
 from maidr.widget.shiny import render_maidr
-from scipy.stats import norm, t, beta
+from scipy.stats import norm, t, uniform, beta
 
 # Define color palettes
 color_palettes = {
@@ -50,12 +51,6 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default"
             ),
-            ui.input_select(
-                "skewness_type",
-                "Select skewness type:",
-                choices=["Positive Skew", "Negative Skew", "Normal (No Skew)"],
-                selected="Normal (No Skew)"
-            ),
             ui.output_ui("create_skewness_histogram"),
         ),
         # Second tab: Histogram Modality
@@ -67,12 +62,6 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default"
             ),
-            ui.input_select(
-                "modality_type",
-                "Select modality type:",
-                choices=["Unimodal", "Bimodal", "Multimodal"],
-                selected="Unimodal"
-            ),
             ui.output_ui("create_modality_histogram"),
         ),
         # Third tab: Histogram Kurtosis
@@ -83,12 +72,6 @@ app_ui = ui.page_fluid(
                 "Select histogram color:",
                 choices=list(color_palettes.keys()),
                 selected="Default"
-            ),
-            ui.input_select(
-                "kurtosis_type",
-                "Select kurtosis type:",
-                choices=["Leptokurtic", "Mesokurtic", "Platykurtic"],
-                selected="Mesokurtic"
             ),
             ui.output_ui("create_kurtosis_histogram"),
         ),
@@ -119,7 +102,7 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_skewness_histogram():
-        skewness_type = input.skewness_type()
+        skewness_type = random.choice(["Positive Skew", "Negative Skew", "Normal (No Skew)"])
         color = color_palettes[input.skewness_color()]
 
         # Generate data based on the selected skewness
@@ -144,17 +127,14 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_modality_histogram():
-        modality_type = input.modality_type()
+        modality_type = random.choice(["Unimodal", "Bimodal", "Multimodal"])
         color = color_palettes[input.modality_color()]
 
         # Generate data based on the selected modality
         if modality_type == "Unimodal":
             data = np.random.normal(loc=0, scale=1, size=1000)
         elif modality_type == "Bimodal":
-            data = np.concatenate([
-                np.random.normal(-2, 0.5, size=500),
-                np.random.normal(2, 0.5, size=500)
-            ])
+            data = np.concatenate([np.random.normal(-2, 0.5, size=500), np.random.normal(2, 0.5, size=500)])
         else:  # Multimodal
             data = np.concatenate([
                 np.random.normal(-4, 0.5, size=300),
@@ -176,7 +156,7 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_kurtosis_histogram():
-        kurtosis_type = input.kurtosis_type()
+        kurtosis_type = random.choice(["Leptokurtic", "Mesokurtic", "Platykurtic"])
         color = color_palettes[input.kurtosis_color()]  # Use the same color for both bars and the trend line
 
         # Generate data and PDF based on the selected kurtosis
@@ -222,7 +202,7 @@ def server(input, output, session):
         ax.plot(x, pdf_scaled, color=color, linewidth=2)
 
         # Set titles and labels
-        ax.set_title("Histogram")
+        ax.set_title(f"Histogram")
         ax.set_xlabel("Value")
         ax.set_ylabel("Density")
         ax.set_xlim(-4, 4)
