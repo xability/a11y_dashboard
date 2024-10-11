@@ -191,7 +191,7 @@ def server(input, output, session):
         # Generate data and PDF based on the selected kurtosis
         x = np.linspace(-4, 4, 1000)
         bins = np.linspace(-4, 4, 40)  # Consistent bins for all histograms
-        y_max = 0.8  # Predefined y-axis maximum for consistent scaling
+        y_max = 0.9  # Increase y-axis maximum to accommodate the peak
 
         if kurtosis_type == "Leptokurtic":
             # Use a normal distribution with a very small standard deviation to create a sharp peak
@@ -228,18 +228,38 @@ def server(input, output, session):
             data, bins=bins, alpha=0.7, color=color, density=True, edgecolor="black"
         )
 
-        # Plot the scaled PDF line
-        ax.plot(x, pdf_scaled, color=color, linewidth=2)
+            # Plot histogram directly from this data
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
 
-        # Set titles and labels
+        elif kurtosis_type == "Mesokurtic":
+            data = np.random.normal(size=10000)  # Normal distribution for Mesokurtic
+            
+            # Plot histogram
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
+
+            # Generate and plot the PDF for the trend line
+            pdf = norm.pdf(x)
+            ax.plot(x, pdf, color=color, linewidth=2, label="PDF")
+
+        else:  # Platykurtic
+            data = beta.rvs(a=2, b=2, size=10000)  # Beta distribution for a flatter peak
+            data = (data - 0.5) * 8  # Scale and center the data to match the range
+            
+            # Plot histogram
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor='black')
+
+            # Generate and plot the PDF for the trend line
+            pdf = beta.pdf((x / 8) + 0.5, a=2, b=2) / 8
+            ax.plot(x, pdf, color=color, linewidth=2, label="PDF")
+
+        # Set the titles and labels
         ax.set_title("Histogram")
         ax.set_xlabel("Value")
         ax.set_ylabel("Density")
         ax.set_xlim(-4, 4)
-        ax.set_ylim(0, y_max)  # Set consistent y-axis limits
+        ax.set_ylim(0, y_max)  # Adjust y-axis for better visualization
 
         return ax
-
 
 # Create the app
 app = App(app_ui, server)
