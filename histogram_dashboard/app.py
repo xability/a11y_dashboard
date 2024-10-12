@@ -198,8 +198,12 @@ def server(input, output, session):
             figsize=(10, 6)
         )  # Create figure and axis BEFORE plotting
 
+        # Set random seed for reproducibility
+        np.random.seed(0)
+
         if kurtosis_type == "Leptokurtic":
-            data = np.random.laplace(size=10000)  # Leptokurtic distribution
+
+            data = np.random.normal(0, 0.5, 1000) ** 3  # Leptokurtic distribution
             sns.histplot(
                 data,
                 bins=bins,
