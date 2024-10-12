@@ -1,10 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import seaborn as sns
 from maidr.widget.shiny import render_maidr
-from scipy.stats import beta, norm, t
-from shiny import App, reactive, render, ui
+from scipy.stats import beta, norm
+from shiny import App, reactive, ui
 
 # Define color palettes
 color_palettes = {
