@@ -2,10 +2,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import random
 from shiny import App, ui, render, reactive
 from maidr.widget.shiny import render_maidr
-from scipy.stats import norm, t, uniform, beta
+from scipy.stats import norm, beta
 
 # Define color palettes
 color_palettes = {
@@ -38,6 +37,12 @@ app_ui = ui.page_fluid(
                 "Theme:",
                 choices=["Light", "Dark"],
                 selected="Light"
+            ),
+            ui.input_select(
+                "color",
+                "Color:",
+                choices=list(color_palettes.keys()),
+                selected="Default"
             )
         )
     ),
@@ -45,34 +50,16 @@ app_ui = ui.page_fluid(
         # First tab: Histogram Skewness
         ui.nav_panel(
             "Histogram Skewness",
-            ui.input_select(
-                "skewness_color",
-                "Select histogram color:",
-                choices=list(color_palettes.keys()),
-                selected="Default"
-            ),
             ui.output_ui("create_skewness_histogram"),
         ),
         # Second tab: Histogram Modality
         ui.nav_panel(
             "Histogram Modality",
-            ui.input_select(
-                "modality_color",
-                "Select histogram color:",
-                choices=list(color_palettes.keys()),
-                selected="Default"
-            ),
             ui.output_ui("create_modality_histogram"),
         ),
         # Third tab: Histogram Kurtosis
         ui.nav_panel(
             "Histogram Kurtosis",
-            ui.input_select(
-                "kurtosis_color",
-                "Select histogram color:",
-                choices=list(color_palettes.keys()),
-                selected="Default"
-            ),
             ui.output_ui("create_kurtosis_histogram"),
         ),
     )
@@ -102,8 +89,9 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_skewness_histogram():
-        skewness_type = random.choice(["Positive Skew", "Negative Skew", "Normal (No Skew)"])
-        color = color_palettes[input.skewness_color()]
+        skewness_types = ["Positive Skew", "Negative Skew", "Normal (No Skew)"]
+        skewness_type = np.random.choice(skewness_types)
+        color = color_palettes[input.color()]
 
         # Generate data based on the selected skewness
         if skewness_type == "Positive Skew":
@@ -127,8 +115,9 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_modality_histogram():
-        modality_type = random.choice(["Unimodal", "Bimodal", "Multimodal"])
-        color = color_palettes[input.modality_color()]
+        modality_types = ["Unimodal", "Bimodal", "Multimodal"]
+        modality_type = np.random.choice(modality_types)
+        color = color_palettes[input.color()]
 
         # Generate data based on the selected modality
         if modality_type == "Unimodal":
@@ -156,57 +145,46 @@ def server(input, output, session):
     @output
     @render_maidr
     def create_kurtosis_histogram():
-        kurtosis_type = random.choice(["Leptokurtic", "Mesokurtic", "Platykurtic"])
-        color = color_palettes[input.kurtosis_color()]  # Use the same color for both bars and the trend line
+        kurtosis_types = ["Leptokurtic", "Mesokurtic", "Platykurtic"]
+        kurtosis_type = np.random.choice(kurtosis_types)
+        color = color_palettes[input.color()]
 
         # Generate data and PDF based on the selected kurtosis
         x = np.linspace(-4, 4, 1000)
         bins = np.linspace(-4, 4, 40)  # Consistent bins for all histograms
-        y_max = 0.8  # Predefined y-axis maximum for consistent scaling
-
-        if kurtosis_type == "Leptokurtic":
-            # Decrease df to 0.5 to increase kurtosis
-            df_lepto = 0.5
-            data = np.random.standard_t(df=df_lepto, size=10000)
-            pdf = t.pdf(x, df=df_lepto)
-            # Scale the PDF to match the histogram peak
-            hist_values, _ = np.histogram(data, bins=bins, density=True)
-            scale_factor = max(hist_values) / max(pdf)
-            pdf_scaled = pdf * scale_factor
-        elif kurtosis_type == "Mesokurtic":
-            data = np.random.normal(size=10000)  # Normal distribution for Mesokurtic
-            pdf = norm.pdf(x)
-            # Scale the PDF to match the histogram peak
-            hist_values, _ = np.histogram(data, bins=bins, density=True)
-            scale_factor = max(hist_values) / max(pdf)
-            pdf_scaled = pdf * scale_factor
-        else:  # Platykurtic
-            data = beta.rvs(a=2, b=2, size=10000)  # Beta distribution for a flatter peak
-            data = (data - 0.5) * 8  # Scale and center to match the range
-            pdf = beta.pdf((x / 8) + 0.5, a=2, b=2) / 8
-            # Scale the PDF to match the histogram peak
-            hist_values, _ = np.histogram(data, bins=bins, density=True)
-            scale_factor = max(hist_values) / max(pdf)
-            pdf_scaled = pdf * scale_factor
+        y_max = 0.9  # Increase y-axis maximum to accommodate the peak
 
         # Create the plot using matplotlib
-        fig, ax = plt.subplots(figsize=(10, 6))
-        set_theme(fig, ax)
+        fig, ax = plt.subplots(figsize=(10, 6))  # Create figure and axis BEFORE plotting
 
-        # Plot histogram with density=True to normalize the bars
-        ax.hist(
-            data, bins=bins, alpha=0.7, color=color, density=True, edgecolor='black'
-        )
+        # Set random seed for reproducibility
+        np.random.seed(0)
 
-        # Plot the scaled PDF line
-        ax.plot(x, pdf_scaled, color=color, linewidth=2)
+        if kurtosis_type == "Leptokurtic":
+            data = np.random.normal(0, 0.5, 1000) ** 3  # Leptokurtic distribution
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor="black")
+        elif kurtosis_type == "Mesokurtic":
+            data = np.random.normal(size=10000)  # Normal distribution for Mesokurtic
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor="black")
+            # Generate and plot the PDF for the trend line
+            pdf = norm.pdf(x)
+            ax.plot(x, pdf, color=color, linewidth=2, label="PDF")
+        else:  # Platykurtic
+            data = beta.rvs(a=2, b=2, size=10000)  # Beta distribution for a flatter peak
+            data = (data - 0.5) * 8  # Scale and center the data to match the range
+            sns.histplot(data, bins=bins, kde=False, stat="density", ax=ax, color=color, edgecolor="black")
+            # Generate and plot the PDF for the trend line
+            pdf = beta.pdf((x / 8) + 0.5, a=2, b=2) / 8
+            ax.plot(x, pdf, color=color, linewidth=2, label="PDF")
 
-        # Set titles and labels
-        ax.set_title(f"Histogram")
+        # Set the titles and labels
+        ax.set_title("Kurtosis Histogram")
         ax.set_xlabel("Value")
         ax.set_ylabel("Density")
         ax.set_xlim(-4, 4)
-        ax.set_ylim(0, y_max)  # Set consistent y-axis limits
+        ax.set_ylim(0, y_max)  # Adjust y-axis for better visualization
+
+        set_theme(fig, ax)  # Assuming this is a custom function for styling
 
         return ax
 
