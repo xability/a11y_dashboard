@@ -1,3 +1,4 @@
+maidr
 shiny
 seaborn
 pandas
