@@ -1,10 +1,10 @@
-import seaborn as sns
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from shiny import App, ui, render, reactive
-from shiny.types import FileInfo
+import seaborn as sns
 from maidr.widget.shiny import render_maidr
+from shiny import App, reactive, render, ui
+from shiny.types import FileInfo
 
 # Set random seed
 np.random.seed(1000)
@@ -16,55 +16,53 @@ color_palettes = {
     "Green": "#00FF00",
     "Blue": "#0000FF",
     "Purple": "#800080",
-    "Orange": "#FFA500"
+    "Orange": "#FFA500",
 }
 
 # Define the UI components for the Shiny application with tabs and sidebar
 app_ui = ui.page_fluid(
     # Head content for custom CSS and JavaScript
     ui.head_content(
-        ui.tags.style("""
+        ui.tags.style(
+            """
             body.dark-theme { background-color: #2E2E2E; color: white; }
             body.light-theme { background-color: white; color: black; }
-        """),
-        ui.tags.script("""
+        """
+        ),
+        ui.tags.script(
+            """
             Shiny.addCustomMessageHandler("update_theme", function(theme) {
                 document.body.classList.toggle("dark-theme", theme === "Dark");
                 document.body.classList.toggle("light-theme", theme === "Light");
             });
-        """)
+        """
+        ),
     ),
     ui.navset_tab(
         ui.nav_menu(
             "Settings",
             ui.nav_control(
                 ui.input_select(
-                    "theme",
-                    "Theme:",
-                    choices=["Light", "Dark"],
-                    selected="Light"
+                    "theme", "Theme:", choices=["Light", "Dark"], selected="Light"
                 )
-            )
+            ),
         ),
-
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
             "Practice",
             ui.row(
                 # Left column for file upload, table, and conditional dropdowns (50% width)
-                ui.column(6,
+                ui.column(
+                    6,
                     ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
                     ui.output_table("data_types"),
                     ui.output_ui("plot_options"),  # Conditionally render dropdowns
-                    ui.output_ui("variable_input")  # Variable input for specific plot
+                    ui.output_ui("variable_input"),  # Variable input for specific plot
                 ),
                 # Right column for the plot (50% width)
-                ui.column(6,
-                    ui.output_ui("create_custom_plot")
-                )
-            )
+                ui.column(6, ui.output_ui("create_custom_plot")),
+            ),
         ),
-
         # First tab: Histogram with dropdowns and plot
         ui.nav_panel(
             "Tutorial - Histogram",
@@ -85,7 +83,7 @@ app_ui = ui.page_fluid(
                 "hist_color",
                 "Select histogram color:",
                 choices=list(color_palettes.keys()),
-                selected="Default"
+                selected="Default",
             ),
             ui.output_ui("create_histogram"),
         ),
@@ -107,7 +105,7 @@ app_ui = ui.page_fluid(
                 "boxplot_color",
                 "Select box plot color:",
                 choices=list(color_palettes.keys()),
-                selected="Default"
+                selected="Default",
             ),
             ui.output_ui("create_boxplot"),
         ),
@@ -130,7 +128,7 @@ app_ui = ui.page_fluid(
                 "scatter_color",
                 "Select scatter plot color:",
                 choices=list(color_palettes.keys()),
-                selected="Default"
+                selected="Default",
             ),
             ui.output_ui("create_scatterplot"),
         ),
@@ -141,7 +139,7 @@ app_ui = ui.page_fluid(
                 "barplot_color",
                 "Select bar plot color:",
                 choices=list(color_palettes.keys()),
-                selected="Default"
+                selected="Default",
             ),
             ui.output_ui("create_barplot"),
         ),
@@ -163,7 +161,7 @@ app_ui = ui.page_fluid(
                 "lineplot_color",
                 "Select line plot color:",
                 choices=list(color_palettes.keys()),
-                selected="Default"
+                selected="Default",
             ),
             ui.output_ui("create_lineplot"),
         ),
@@ -181,9 +179,10 @@ app_ui = ui.page_fluid(
                 selected="Random",
             ),
             ui.output_ui("create_heatmap"),
-        )
-    )
+        ),
+    ),
 )
+
 
 # Define the server logic
 def server(input, output, session):
@@ -198,13 +197,13 @@ def server(input, output, session):
     def set_theme(fig, ax):
         theme = input.theme()
         if theme == "Dark":
-            plt.style.use('dark_background')
-            fig.patch.set_facecolor('#2E2E2E')
-            ax.set_facecolor('#2E2E2E')
+            plt.style.use("dark_background")
+            fig.patch.set_facecolor("#2E2E2E")
+            ax.set_facecolor("#2E2E2E")
         else:
-            plt.style.use('default')
-            fig.patch.set_facecolor('white')
-            ax.set_facecolor('white')
+            plt.style.use("default")
+            fig.patch.set_facecolor("white")
+            ax.set_facecolor("white")
 
     @output
     @render.ui
@@ -216,14 +215,14 @@ def server(input, output, session):
                     "plot_type",
                     "Select plot type:",
                     choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot"],
-                    selected=""
+                    selected="",
                 ),
                 ui.input_select(
                     "plot_color",
                     "Select plot color:",
                     choices=list(color_palettes.keys()),
-                    selected="Default"
-                )
+                    selected="Default",
+                ),
             )
         return ui.div()  # Return an empty div if no file is uploaded
 
@@ -244,12 +243,23 @@ def server(input, output, session):
         elif distribution_type == "Unimodal Distribution":
             data = np.random.normal(loc=0, scale=2.5, size=1000)
         elif distribution_type == "Bimodal Distribution":
-            data = np.concatenate([np.random.normal(-2, 0.5, size=500), np.random.normal(2, 0.5, size=500)])
+            data = np.concatenate(
+                [
+                    np.random.normal(-2, 0.5, size=500),
+                    np.random.normal(2, 0.5, size=500),
+                ]
+            )
         elif distribution_type == "Multimodal Distribution":
-            data = np.concatenate([np.random.normal(-2, 0.5, size=300), np.random.normal(2, 0.5, size=300), np.random.normal(5, 0.5, size=400)])
+            data = np.concatenate(
+                [
+                    np.random.normal(-2, 0.5, size=300),
+                    np.random.normal(2, 0.5, size=300),
+                    np.random.normal(5, 0.5, size=400),
+                ]
+            )
         else:
             data = np.random.normal(size=1000)
-        
+
         # Create the plot using matplotlib
         fig, ax = plt.subplots(figsize=(10, 6))
         set_theme(fig, ax)
@@ -257,7 +267,7 @@ def server(input, output, session):
         ax.set_title(f"{distribution_type}")
         ax.set_xlabel("Value")
         ax.set_ylabel("Frequency")
-        
+
         return ax
 
     # Tutorial - Box Plot
@@ -286,7 +296,7 @@ def server(input, output, session):
         sns.boxplot(x=data, ax=ax, color=color)  # Horizontal box plot
         ax.set_title(f"{boxplot_type}")
         ax.set_xlabel("Value")
-        
+
         return ax
 
     # Tutorial - Scatter Plot
@@ -296,7 +306,9 @@ def server(input, output, session):
         scatterplot_type = input.scatterplot_type()
         color = color_palettes[input.scatter_color()]
 
-        num_points = np.random.randint(20, 31)  # Randomly select between 20 and 30 points
+        num_points = np.random.randint(
+            20, 31
+        )  # Randomly select between 20 and 30 points
         if scatterplot_type == "No Correlation":
             x = np.random.uniform(size=num_points)
             y = np.random.uniform(size=num_points)
@@ -320,7 +332,7 @@ def server(input, output, session):
         ax.set_title(f"{scatterplot_type}")
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
-        
+
         return ax
 
     # Tutorial - Bar Plot
@@ -328,7 +340,13 @@ def server(input, output, session):
     @render_maidr
     def create_barplot():
         color = color_palettes[input.barplot_color()]
-        categories = ["Category A", "Category B", "Category C", "Category D", "Category E"]
+        categories = [
+            "Category A",
+            "Category B",
+            "Category C",
+            "Category D",
+            "Category E",
+        ]
         values = np.random.randint(10, 100, size=5)
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -337,7 +355,7 @@ def server(input, output, session):
         ax.set_title("Plot of Categories")
         ax.set_xlabel("Categories")
         ax.set_ylabel("Values")
-        
+
         return ax
 
     # Tutorial - Line Plot
@@ -363,7 +381,7 @@ def server(input, output, session):
         ax.set_title(f"{lineplot_type}")
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
-        
+
         return ax
 
     # New function: Tutorial - Heatmap
@@ -375,7 +393,9 @@ def server(input, output, session):
         if heatmap_type == "Random":
             data = np.random.rand(5, 5)  # Reduced size
         elif heatmap_type == "Correlated":
-            data = np.random.multivariate_normal([0] * 5, np.eye(5), size=5)  # Reduced size
+            data = np.random.multivariate_normal(
+                [0] * 5, np.eye(5), size=5
+            )  # Reduced size
         elif heatmap_type == "Checkerboard":
             data = np.indices((5, 5)).sum(axis=0) % 2  # Reduced size
 
@@ -383,7 +403,7 @@ def server(input, output, session):
         set_theme(fig, ax)
         sns.heatmap(data, ax=ax, cmap="YlGnBu", annot=True, fmt=".2f")
         ax.set_title(f"{heatmap_type}")
-        
+
         return ax
 
     # Practice Tab Logic
@@ -395,10 +415,21 @@ def server(input, output, session):
             df = pd.read_csv(file[0]["datapath"])
             uploaded_data.set(df)
             numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
-            categorical_vars = df.select_dtypes(include='object').columns.tolist()
-            
+            categorical_vars = df.select_dtypes(include="object").columns.tolist()
+
             # Update dropdown choices for plots in Practice tab
-            ui.update_select("plot_type", choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot", "Line Plot", "Heatmap"])
+            ui.update_select(
+                "plot_type",
+                choices=[
+                    "",
+                    "Histogram",
+                    "Box Plot",
+                    "Scatter Plot",
+                    "Bar Plot",
+                    "Line Plot",
+                    "Heatmap",
+                ],
+            )
             ui.update_select("var_boxplot_x", choices=[""] + numeric_vars)
             ui.update_select("var_boxplot_y", choices=[""] + categorical_vars)
 
@@ -407,11 +438,18 @@ def server(input, output, session):
     def data_types():
         df = uploaded_data.get()
         if df is not None:
-            data_summary = pd.DataFrame({
-                'Variable': df.columns,
-                'Data Type': df.dtypes.astype(str).replace(
-                    {'object': 'categorical', 'int64': 'numeric', 'float64': 'numeric'})
-            })
+            data_summary = pd.DataFrame(
+                {
+                    "Variable": df.columns,
+                    "Data Type": df.dtypes.astype(str).replace(
+                        {
+                            "object": "categorical",
+                            "int64": "numeric",
+                            "float64": "numeric",
+                        }
+                    ),
+                }
+            )
             return data_summary
 
     @output
@@ -423,15 +461,23 @@ def server(input, output, session):
                 ui.input_select(
                     "plot_type",
                     "Select plot type:",
-                    choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot", "Line Plot", "Heatmap"],
-                    selected=""
+                    choices=[
+                        "",
+                        "Histogram",
+                        "Box Plot",
+                        "Scatter Plot",
+                        "Bar Plot",
+                        "Line Plot",
+                        "Heatmap",
+                    ],
+                    selected="",
                 ),
                 ui.input_select(
                     "plot_color",
                     "Select plot color:",
                     choices=list(color_palettes.keys()),
-                    selected="Default"
-                )
+                    selected="Default",
+                ),
             )
         return ui.div()
 
@@ -443,38 +489,57 @@ def server(input, output, session):
 
         if df is not None and plot_type:
             numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
-            categorical_vars = df.select_dtypes(include='object').columns.tolist()
+            categorical_vars = df.select_dtypes(include="object").columns.tolist()
             all_vars = df.columns.tolist()
 
             if plot_type == "Histogram":
-                return ui.input_select("var_histogram", "Select variable for Histogram:", 
-                                       choices=[""] + numeric_vars)
+                return ui.input_select(
+                    "var_histogram",
+                    "Select variable for Histogram:",
+                    choices=[""] + numeric_vars,
+                )
             elif plot_type == "Box Plot":
                 return ui.div(
-                    ui.input_select("var_boxplot_x", "Select numerical variable for X-axis:", choices=[""] + numeric_vars),
-                    ui.input_select("var_boxplot_y", "Select categorical variable for Y-axis (optional):", choices=[""] + categorical_vars, selected="")
+                    ui.input_select(
+                        "var_boxplot_x",
+                        "Select numerical variable for X-axis:",
+                        choices=[""] + numeric_vars,
+                    ),
+                    ui.input_select(
+                        "var_boxplot_y",
+                        "Select categorical variable for Y-axis (optional):",
+                        choices=[""] + categorical_vars,
+                        selected="",
+                    ),
                 )
             elif plot_type == "Scatter Plot":
                 return ui.div(
-                    ui.input_select("var_scatter_x", "Select X variable:", 
-                                    choices=[""] + numeric_vars),
-                    ui.output_ui("var_scatter_y_output")
+                    ui.input_select(
+                        "var_scatter_x",
+                        "Select X variable:",
+                        choices=[""] + numeric_vars,
+                    ),
+                    ui.output_ui("var_scatter_y_output"),
                 )
             elif plot_type == "Bar Plot":
-                return ui.input_select("var_bar_plot", 
-                                       "Select variable for Bar Plot:", 
-                                       choices=[""] + categorical_vars)
+                return ui.input_select(
+                    "var_bar_plot",
+                    "Select variable for Bar Plot:",
+                    choices=[""] + categorical_vars,
+                )
             elif plot_type == "Line Plot":
                 return ui.div(
-                    ui.input_select("var_line_x", "Select X variable:", 
-                                    choices=[""] + numeric_vars),
-                    ui.output_ui("var_line_y_output")
+                    ui.input_select(
+                        "var_line_x", "Select X variable:", choices=[""] + numeric_vars
+                    ),
+                    ui.output_ui("var_line_y_output"),
                 )
             elif plot_type == "Heatmap":
                 return ui.div(
-                    ui.input_select("var_heatmap_x", "Select X variable:", 
-                                    choices=[""] + all_vars),
-                    ui.output_ui("var_heatmap_y_output")
+                    ui.input_select(
+                        "var_heatmap_x", "Select X variable:", choices=[""] + all_vars
+                    ),
+                    ui.output_ui("var_heatmap_y_output"),
                 )
         return ui.div()
 
@@ -485,8 +550,14 @@ def server(input, output, session):
         df = uploaded_data.get()
         if df is not None:
             x_var = input.var_scatter_x()
-            y_choices = [""] + [var for var in df.select_dtypes(include=np.number).columns if var != x_var]
-            return ui.input_select("var_scatter_y", "Select Y variable:", choices=y_choices)
+            y_choices = [""] + [
+                var
+                for var in df.select_dtypes(include=np.number).columns
+                if var != x_var
+            ]
+            return ui.input_select(
+                "var_scatter_y", "Select Y variable:", choices=y_choices
+            )
         return ui.div()
 
     # Dynamic Y variable selection for Line Plot
@@ -496,8 +567,14 @@ def server(input, output, session):
         df = uploaded_data.get()
         if df is not None:
             x_var = input.var_line_x()
-            y_choices = [""] + [var for var in df.select_dtypes(include=np.number).columns if var != x_var]
-            return ui.input_select("var_line_y", "Select Y variable:", choices=y_choices)
+            y_choices = [""] + [
+                var
+                for var in df.select_dtypes(include=np.number).columns
+                if var != x_var
+            ]
+            return ui.input_select(
+                "var_line_y", "Select Y variable:", choices=y_choices
+            )
         return ui.div()
 
     # Dynamic Y variable selection for Heatmap
@@ -508,7 +585,9 @@ def server(input, output, session):
         if df is not None:
             x_var = input.var_heatmap_x()
             y_choices = [""] + [var for var in df.columns if var != x_var]
-            return ui.input_select("var_heatmap_y", "Select Y variable:", choices=y_choices)
+            return ui.input_select(
+                "var_heatmap_y", "Select Y variable:", choices=y_choices
+            )
         return ui.div()
 
     @output
@@ -572,17 +651,24 @@ def server(input, output, session):
                 var_y = input.var_heatmap_y()
                 if var_x and var_y:
                     # Check if both variables are numerical
-                    if df[var_x].dtype.kind in 'biufc' and df[var_y].dtype.kind in 'biufc':
-                        pivot_table = df.pivot_table(values=var_y, columns=var_x, aggfunc='mean')
+                    if (
+                        df[var_x].dtype.kind in "biufc"
+                        and df[var_y].dtype.kind in "biufc"
+                    ):
+                        pivot_table = df.pivot_table(
+                            values=var_y, columns=var_x, aggfunc="mean"
+                        )
                     else:
                         # If at least one variable is categorical, use crosstab
-                        pivot_table = pd.crosstab(df[var_y], df[var_x], normalize='all')
-                    
-                    sns.heatmap(pivot_table, ax=ax, cmap="YlGnBu", annot=True, fmt=".2f")
+                        pivot_table = pd.crosstab(df[var_y], df[var_x], normalize="all")
+
+                    sns.heatmap(
+                        pivot_table, ax=ax, cmap="YlGnBu", annot=True, fmt=".2f"
+                    )
                     ax.set_title(f"{var_y} vs {var_x}")
                     ax.set_xlabel(var_x.replace("_", " ").title())
                     ax.set_ylabel(var_y.replace("_", " ").title())
-                    
+
                     # # Rotate x-axis labels if there are many categories
                     # if len(pivot_table.columns) > 5:
                     #     plt.xticks(rotation=45, ha='right')
@@ -590,6 +676,7 @@ def server(input, output, session):
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
             return None
+
 
 # Create the app
 app = App(app_ui, server)
