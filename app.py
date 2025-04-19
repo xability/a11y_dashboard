@@ -180,6 +180,45 @@ app_ui = ui.page_fluid(
             ),
             ui.output_ui("create_heatmap"),
         ),
+        # New tab: Multiline Plot
+        ui.nav_panel(
+            "Tutorial - Multiline Plot",
+            ui.input_select(
+                "multiline_type",
+                "Select multiline plot type:",
+                choices=[
+                    "Simple Trends",
+                    "Seasonal Patterns",
+                    "Growth Comparison",
+                    "Random Series",
+                ],
+                selected="Simple Trends",
+            ),
+            ui.input_select(
+                "multiline_color",
+                "Select color palette:",
+                choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
+                selected="Default",
+            ),
+            ui.output_ui("create_multiline_plot"),
+        ),
+        # New tab: Multilayer Plot (Bar + Line)
+        ui.nav_panel(
+            "Tutorial - Multilayer Plot",
+            ui.input_select(
+                "multilayer_bar_color", 
+                "Select bar color:",
+                choices=["skyblue", "lightgreen", "salmon", "lightpurple", "gold", "teal"],
+                selected="skyblue",
+            ),
+            ui.input_select(
+                "multilayer_line_color", 
+                "Select line color:",
+                choices=["red", "blue", "green", "purple", "orange", "black"],
+                selected="red",
+            ),
+            ui.output_ui("create_multilayer_plot"),
+        ),
     ),
 )
 
@@ -187,6 +226,8 @@ app_ui = ui.page_fluid(
 # Define the server logic
 def server(input, output, session):
     uploaded_data = reactive.Value(None)
+    # Add a reactive value to store multiline plot data
+    multiline_data = reactive.Value(None)
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -208,13 +249,23 @@ def server(input, output, session):
     @output
     @render.ui
     def plot_options():
-        file = input.file_upload()  # Check if file is uploaded
-        if file and len(file) > 0:  # Only show if file is present
+        df = uploaded_data.get()
+        if df is not None:
             return ui.div(
                 ui.input_select(
                     "plot_type",
                     "Select plot type:",
-                    choices=["", "Histogram", "Box Plot", "Scatter Plot", "Bar Plot"],
+                    choices=[
+                        "",
+                        "Histogram",
+                        "Box Plot",
+                        "Scatter Plot",
+                        "Bar Plot",
+                        "Line Plot",
+                        "Heatmap",
+                        "Multiline Plot",
+                        "Multilayer Plot"
+                    ],
                     selected="",
                 ),
                 ui.input_select(
@@ -224,7 +275,7 @@ def server(input, output, session):
                     selected="Default",
                 ),
             )
-        return ui.div()  # Return an empty div if no file is uploaded
+        return ui.div()
 
     # Tutorial - Histogram Plot
     @output
@@ -406,6 +457,140 @@ def server(input, output, session):
 
         return ax
 
+    # Tutorial - Multiline Plot
+    @reactive.Effect
+    @reactive.event(input.multiline_type)
+    def update_multiline_data():
+        multiline_type = input.multiline_type()
+        
+        # Generate different data based on the selected type
+        x = np.linspace(0, 10, 30)  # 30 points for x-axis
+        series_names = ["Series 1", "Series 2", "Series 3"]
+        
+        if multiline_type == "Simple Trends":
+            # Linear trends with different slopes
+            y1 = 1.5 * x + np.random.normal(0, 1, 30)
+            y2 = 0.5 * x + 5 + np.random.normal(0, 1, 30)
+            y3 = -x + 15 + np.random.normal(0, 1, 30)
+        elif multiline_type == "Seasonal Patterns":
+            # Sinusoidal patterns with different phases
+            y1 = 5 * np.sin(x) + 10 + np.random.normal(0, 0.5, 30)
+            y2 = 5 * np.sin(x + np.pi/2) + 10 + np.random.normal(0, 0.5, 30)
+            y3 = 5 * np.sin(x + np.pi) + 10 + np.random.normal(0, 0.5, 30)
+        elif multiline_type == "Growth Comparison":
+            # Different growth patterns
+            y1 = np.exp(0.2 * x) + np.random.normal(0, 0.5, 30)
+            y2 = x**2 / 10 + np.random.normal(0, 1, 30)
+            y3 = np.log(x + 1) * 5 + np.random.normal(0, 0.5, 30)
+        else:  # Random Series
+            # Random walks with different volatilities
+            y1 = np.cumsum(np.random.normal(0, 0.5, 30))
+            y2 = np.cumsum(np.random.normal(0.1, 0.7, 30))
+            y3 = np.cumsum(np.random.normal(-0.05, 0.9, 30))
+        
+        # Store the data in a reactive value
+        multiline_data.set(pd.DataFrame({
+            "x": np.tile(x, 3),
+            "y": np.concatenate([y1, y2, y3]),
+            "series": np.repeat(series_names, len(x))
+        }))
+    
+    @output
+    @render_maidr
+    def create_multiline_plot():
+        # Only get the current palette, data comes from reactive value
+        palette = input.multiline_color()
+        multiline_type = input.multiline_type()
+        
+        # Initialize data if it hasn't been done yet
+        if multiline_data.get() is None:
+            update_multiline_data()
+        
+        # Get the stored data
+        data = multiline_data.get()
+        
+        # Create the plot using matplotlib and seaborn
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_theme(fig, ax)
+        
+        # Map friendly palette names to seaborn palette names
+        palette_mapping = {
+            "Default": None,  # Use default seaborn palette
+            "Colorful": "Set1",
+            "Pastel": "Set2",
+            "Dark Tones": "Dark2",
+            "Paired Colors": "Paired",
+            "Rainbow": "Spectral"
+        }
+        
+        # Use seaborn lineplot for multiple lines
+        if palette == "Default":
+            # Use default seaborn color palette
+            lineplot = sns.lineplot(
+                x="x", y="y", hue="series", style="series", 
+                markers=True, dashes=True, data=data, ax=ax
+            )
+        else:
+            # Use selected color palette
+            lineplot = sns.lineplot(
+                x="x", y="y", hue="series", style="series", 
+                markers=True, dashes=True, data=data, ax=ax,
+                palette=palette_mapping[palette]
+            )
+        
+        # Customize the plot
+        ax.set_title(f"Multiline Plot: {multiline_type}")
+        ax.set_xlabel("X values")
+        ax.set_ylabel("Y values")
+        
+        return ax
+
+    # Tutorial - Multilayer Plot
+    @output
+    @render_maidr
+    def create_multilayer_plot():
+        bar_color = input.multilayer_bar_color()
+        line_color = input.multilayer_line_color()
+        
+        # Generate sample data
+        x = np.arange(5)
+        bar_data = np.array([3, 5, 2, 7, 3])
+        line_data = np.array([10, 8, 12, 14, 9])
+        
+        # Create a figure and a set of subplots
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        set_theme(fig, ax1)
+        
+        # Create the bar chart on the first y-axis
+        ax1.bar(x, bar_data, color=bar_color, label="Bar Data")
+        ax1.set_xlabel("X values")
+        ax1.set_ylabel("Bar values", color="blue")
+        ax1.tick_params(axis="y", labelcolor="blue")
+        
+        # Create a second y-axis sharing the same x-axis
+        ax2 = ax1.twinx()
+        
+        # Create the line chart on the second y-axis
+        ax2.plot(x, line_data, color=line_color, marker="o", linestyle="-", label="Line Data")
+        ax2.set_ylabel("Line values", color=line_color)
+        ax2.tick_params(axis="y", labelcolor=line_color)
+        
+        # Add title
+        plt.title("Multilayer Plot Example")
+        
+        # Add legends for both axes
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+        
+        # Adjust layout
+        fig.tight_layout()
+        
+        # Import maidr for accessibility
+        import maidr
+        
+        return ax1
+
     # Practice Tab Logic
     @reactive.Effect
     @reactive.event(input.file_upload)
@@ -428,6 +613,7 @@ def server(input, output, session):
                     "Bar Plot",
                     "Line Plot",
                     "Heatmap",
+                    "Multiline Plot",
                 ],
             )
             ui.update_select("var_boxplot_x", choices=[""] + numeric_vars)
@@ -469,6 +655,8 @@ def server(input, output, session):
                         "Bar Plot",
                         "Line Plot",
                         "Heatmap",
+                        "Multiline Plot",
+                        "Multilayer Plot"
                     ],
                     selected="",
                 ),
@@ -530,16 +718,67 @@ def server(input, output, session):
             elif plot_type == "Line Plot":
                 return ui.div(
                     ui.input_select(
-                        "var_line_x", "Select X variable:", choices=[""] + numeric_vars
+                        "var_line_x", 
+                        "Select X variable:", 
+                        choices=[""] + numeric_vars
                     ),
                     ui.output_ui("var_line_y_output"),
                 )
             elif plot_type == "Heatmap":
                 return ui.div(
                     ui.input_select(
-                        "var_heatmap_x", "Select X variable:", choices=[""] + all_vars
+                        "var_heatmap_x", 
+                        "Select X variable:", 
+                        choices=[""] + all_vars
                     ),
                     ui.output_ui("var_heatmap_y_output"),
+                )
+            elif plot_type == "Multiline Plot":
+                return ui.div(
+                    ui.input_select(
+                        "var_multiline_x", 
+                        "Select X variable (numeric):", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.output_ui("var_multiline_y_output"),
+                    ui.input_select(
+                        "var_multiline_group", 
+                        "Select grouping variable (categorical):", 
+                        choices=[""] + categorical_vars
+                    ),
+                    ui.input_select(
+                        "multiline_palette",
+                        "Select color palette:",
+                        choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
+                        selected="Default",
+                    )
+                )
+            elif plot_type == "Multilayer Plot":
+                return ui.div(
+                    ui.input_select(
+                        "var_multilayer_bar",
+                        "Select variable for bar chart:",
+                        choices=[""] + categorical_vars,
+                    ),
+                    ui.input_select(
+                        "var_multilayer_line",
+                        "Select variable for line chart:",
+                        choices=[""] + numeric_vars,
+                    ),
+                    ui.div(
+                        ui.input_select(
+                            "var_multilayer_bar_color",
+                            "Select bar color:",
+                            choices=["skyblue", "lightgreen", "salmon", "lightpurple", "gold", "teal"],
+                            selected="skyblue",
+                        ),
+                        ui.input_select(
+                            "var_multilayer_line_color",
+                            "Select line color:",
+                            choices=["red", "blue", "green", "purple", "orange", "black"],
+                            selected="red",
+                        ),
+                    )
                 )
         return ui.div()
 
@@ -587,6 +826,23 @@ def server(input, output, session):
             y_choices = [""] + [var for var in df.columns if var != x_var]
             return ui.input_select(
                 "var_heatmap_y", "Select Y variable:", choices=y_choices
+            )
+        return ui.div()
+
+    # Dynamic Y variable selection for Multiline Plot
+    @output
+    @render.ui
+    def var_multiline_y_output():
+        df = uploaded_data.get()
+        if df is not None:
+            x_var = input.var_multiline_x()
+            y_choices = [""] + [
+                var
+                for var in df.select_dtypes(include=np.number).columns
+                if var != x_var
+            ]
+            return ui.input_select(
+                "var_multiline_y", "Select Y variable:", choices=y_choices
             )
         return ui.div()
 
@@ -668,10 +924,109 @@ def server(input, output, session):
                     ax.set_title(f"{var_y} vs {var_x}")
                     ax.set_xlabel(var_x.replace("_", " ").title())
                     ax.set_ylabel(var_y.replace("_", " ").title())
-
-                    # # Rotate x-axis labels if there are many categories
-                    # if len(pivot_table.columns) > 5:
-                    #     plt.xticks(rotation=45, ha='right')
+            elif plot_type == "Multiline Plot":
+                var_x = input.var_multiline_x()
+                var_y = input.var_multiline_y()
+                var_group = input.var_multiline_group()
+                palette = input.multiline_palette()
+                
+                if var_x and var_y and var_group:
+                    # Map friendly palette names to seaborn palette names
+                    palette_mapping = {
+                        "Default": None,  # Use default seaborn palette
+                        "Colorful": "Set1",
+                        "Pastel": "Set2",
+                        "Dark Tones": "Dark2",
+                        "Paired Colors": "Paired",
+                        "Rainbow": "Spectral"
+                    }
+                    
+                    # Use seaborn lineplot for multiple lines
+                    if palette == "Default":
+                        # Use default seaborn color palette
+                        lineplot = sns.lineplot(
+                            x=var_x, y=var_y, hue=var_group, style=var_group, 
+                            markers=True, dashes=True, data=df, ax=ax
+                        )
+                    else:
+                        # Use selected color palette
+                        lineplot = sns.lineplot(
+                            x=var_x, y=var_y, hue=var_group, style=var_group, 
+                            markers=True, dashes=True, data=df, ax=ax,
+                            palette=palette_mapping[palette]
+                        )
+                    
+                    # Customize the plot
+                    ax.set_title(f"{var_y} vs {var_x} by {var_group}")
+                    ax.set_xlabel(var_x.replace("_", " ").title())
+                    ax.set_ylabel(var_y.replace("_", " ").title())
+                    
+                    # Import maidr for accessibility
+                    import maidr
+            elif plot_type == "Multilayer Plot":
+                var_bar = input.var_multilayer_bar()
+                var_line = input.var_multilayer_line()
+                bar_color = input.multilayer_bar_color()
+                line_color = input.multilayer_line_color()
+                
+                if var_bar and var_line:
+                    # Create a figure with dual y-axes
+                    fig, ax1 = plt.subplots(figsize=(10, 6))
+                    set_theme(fig, ax1)
+                    
+                    # Calculate frequencies for the bar variable (categorical)
+                    # Handle both Series and lists by converting to Series if needed
+                    if isinstance(df[var_bar], pd.Series):
+                        bar_series = df[var_bar]
+                    else:
+                        bar_series = pd.Series(df[var_bar])
+                        
+                    value_counts = bar_series.value_counts().sort_index()
+                    categories = value_counts.index.tolist()  # Convert Index to list
+                    counts = value_counts.values
+                    
+                    # Create the bar chart on the first y-axis
+                    ax1.bar(np.arange(len(categories)), counts, color=bar_color, label=var_bar)
+                    ax1.set_xlabel(var_bar.replace("_", " ").title())
+                    ax1.set_ylabel(f"{var_bar} Frequency", color="blue")
+                    ax1.tick_params(axis="y", labelcolor="blue")
+                    ax1.set_xticks(np.arange(len(categories)))
+                    ax1.set_xticklabels(categories, rotation=45, ha="right")
+                    
+                    # Create a second y-axis sharing the same x-axis
+                    ax2 = ax1.twinx()
+                    
+                    # Aggregate the numeric variable by the categorical variable for line chart
+                    # Use a try-except block to handle potential errors
+                    try:
+                        line_data = df.groupby(var_bar)[var_line].mean()
+                        
+                        # Ensure line_data has the same indices as categories
+                        line_values = [line_data.get(cat, 0) for cat in categories]
+                        
+                        # Create the line chart on the second y-axis
+                        ax2.plot(np.arange(len(categories)), line_values, color=line_color, 
+                                marker="o", linestyle="-", label=var_line)
+                        ax2.set_ylabel(f"Mean {var_line}", color=line_color)
+                        ax2.tick_params(axis="y", labelcolor=line_color)
+                    except Exception as e:
+                        print(f"Error in line plot: {str(e)}")
+                        # If line plot fails, at least show the bar chart
+                        ax2.set_ylabel("No line data available", color="gray")
+                    
+                    # Add title
+                    plt.title(f"{var_line} by {var_bar} (Dual Axis)")
+                    
+                    # Add legends for both axes
+                    lines1, labels1 = ax1.get_legend_handles_labels()
+                    lines2, labels2 = ax2.get_legend_handles_labels()
+                    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+                    
+                    # Adjust layout
+                    fig.tight_layout()
+                    
+                    # Return the primary axis for maidr
+                    ax = ax1
             return ax
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
