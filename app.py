@@ -202,23 +202,7 @@ app_ui = ui.page_fluid(
             ),
             ui.output_ui("create_multiline_plot"),
         ),
-        # New tab: Multilayer Plot (Bar + Line)
-        ui.nav_panel(
-            "Tutorial - Multilayer Plot",
-            ui.input_select(
-                "multilayer_bar_color", 
-                "Select bar color:",
-                choices=["skyblue", "lightgreen", "salmon", "lightpurple", "gold", "teal"],
-                selected="skyblue",
-            ),
-            ui.input_select(
-                "multilayer_line_color", 
-                "Select line color:",
-                choices=["red", "blue", "green", "purple", "orange", "black"],
-                selected="red",
-            ),
-            ui.output_ui("create_multilayer_plot"),
-        ),
+        
     ),
 )
 
@@ -263,8 +247,7 @@ def server(input, output, session):
                         "Bar Plot",
                         "Line Plot",
                         "Heatmap",
-                        "Multiline Plot",
-                        "Multilayer Plot"
+                        "Multiline Plot"
                     ],
                     selected="",
                 ),
@@ -545,52 +528,6 @@ def server(input, output, session):
         
         return ax
 
-    # Tutorial - Multilayer Plot
-    @output
-    @render_maidr
-    def create_multilayer_plot():
-        bar_color = input.multilayer_bar_color()
-        line_color = input.multilayer_line_color()
-        
-        # Generate sample data
-        x = np.arange(5)
-        bar_data = np.array([3, 5, 2, 7, 3])
-        line_data = np.array([10, 8, 12, 14, 9])
-        
-        # Create a figure and a set of subplots
-        fig, ax1 = plt.subplots(figsize=(10, 6))
-        set_theme(fig, ax1)
-        
-        # Create the bar chart on the first y-axis
-        ax1.bar(x, bar_data, color=bar_color, label="Bar Data")
-        ax1.set_xlabel("X values")
-        ax1.set_ylabel("Bar values", color="blue")
-        ax1.tick_params(axis="y", labelcolor="blue")
-        
-        # Create a second y-axis sharing the same x-axis
-        ax2 = ax1.twinx()
-        
-        # Create the line chart on the second y-axis
-        ax2.plot(x, line_data, color=line_color, marker="o", linestyle="-", label="Line Data")
-        ax2.set_ylabel("Line values", color=line_color)
-        ax2.tick_params(axis="y", labelcolor=line_color)
-        
-        # Add title
-        plt.title("Multilayer Plot Example")
-        
-        # Add legends for both axes
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
-        
-        # Adjust layout
-        fig.tight_layout()
-        
-        # Import maidr for accessibility
-        import maidr
-        
-        return ax1
-
     # Practice Tab Logic
     @reactive.Effect
     @reactive.event(input.file_upload)
@@ -655,8 +592,7 @@ def server(input, output, session):
                         "Bar Plot",
                         "Line Plot",
                         "Heatmap",
-                        "Multiline Plot",
-                        "Multilayer Plot"
+                        "Multiline Plot"
                     ],
                     selected="",
                 ),
@@ -728,10 +664,25 @@ def server(input, output, session):
                 return ui.div(
                     ui.input_select(
                         "var_heatmap_x", 
-                        "Select X variable:", 
-                        choices=[""] + all_vars
+                        "Select X variable (categorical):", 
+                        choices=[""] + categorical_vars
                     ),
-                    ui.output_ui("var_heatmap_y_output"),
+                    ui.input_select(
+                        "var_heatmap_y", 
+                        "Select Y variable (categorical):", 
+                        choices=[""] + categorical_vars
+                    ),
+                    ui.input_select(
+                        "var_heatmap_value", 
+                        "Select value variable (numeric):", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "heatmap_colorscale",
+                        "Select color palette:",
+                        choices=["YlOrRd", "viridis", "plasma", "inferno", "RdBu_r", "coolwarm"],
+                        selected="YlOrRd",
+                    )
                 )
             elif plot_type == "Multiline Plot":
                 return ui.div(
@@ -751,33 +702,6 @@ def server(input, output, session):
                         "Select color palette:",
                         choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
                         selected="Default",
-                    )
-                )
-            elif plot_type == "Multilayer Plot":
-                return ui.div(
-                    ui.input_select(
-                        "var_multilayer_bar",
-                        "Select variable for bar chart:",
-                        choices=[""] + categorical_vars,
-                    ),
-                    ui.input_select(
-                        "var_multilayer_line",
-                        "Select variable for line chart:",
-                        choices=[""] + numeric_vars,
-                    ),
-                    ui.div(
-                        ui.input_select(
-                            "var_multilayer_bar_color",
-                            "Select bar color:",
-                            choices=["skyblue", "lightgreen", "salmon", "lightpurple", "gold", "teal"],
-                            selected="skyblue",
-                        ),
-                        ui.input_select(
-                            "var_multilayer_line_color",
-                            "Select line color:",
-                            choices=["red", "blue", "green", "purple", "orange", "black"],
-                            selected="red",
-                        ),
                     )
                 )
         return ui.div()
@@ -963,70 +887,6 @@ def server(input, output, session):
                     
                     # Import maidr for accessibility
                     import maidr
-            elif plot_type == "Multilayer Plot":
-                var_bar = input.var_multilayer_bar()
-                var_line = input.var_multilayer_line()
-                bar_color = input.multilayer_bar_color()
-                line_color = input.multilayer_line_color()
-                
-                if var_bar and var_line:
-                    # Create a figure with dual y-axes
-                    fig, ax1 = plt.subplots(figsize=(10, 6))
-                    set_theme(fig, ax1)
-                    
-                    # Calculate frequencies for the bar variable (categorical)
-                    # Handle both Series and lists by converting to Series if needed
-                    if isinstance(df[var_bar], pd.Series):
-                        bar_series = df[var_bar]
-                    else:
-                        bar_series = pd.Series(df[var_bar])
-                        
-                    value_counts = bar_series.value_counts().sort_index()
-                    categories = value_counts.index.tolist()  # Convert Index to list
-                    counts = value_counts.values
-                    
-                    # Create the bar chart on the first y-axis
-                    ax1.bar(np.arange(len(categories)), counts, color=bar_color, label=var_bar)
-                    ax1.set_xlabel(var_bar.replace("_", " ").title())
-                    ax1.set_ylabel(f"{var_bar} Frequency", color="blue")
-                    ax1.tick_params(axis="y", labelcolor="blue")
-                    ax1.set_xticks(np.arange(len(categories)))
-                    ax1.set_xticklabels(categories, rotation=45, ha="right")
-                    
-                    # Create a second y-axis sharing the same x-axis
-                    ax2 = ax1.twinx()
-                    
-                    # Aggregate the numeric variable by the categorical variable for line chart
-                    # Use a try-except block to handle potential errors
-                    try:
-                        line_data = df.groupby(var_bar)[var_line].mean()
-                        
-                        # Ensure line_data has the same indices as categories
-                        line_values = [line_data.get(cat, 0) for cat in categories]
-                        
-                        # Create the line chart on the second y-axis
-                        ax2.plot(np.arange(len(categories)), line_values, color=line_color, 
-                                marker="o", linestyle="-", label=var_line)
-                        ax2.set_ylabel(f"Mean {var_line}", color=line_color)
-                        ax2.tick_params(axis="y", labelcolor=line_color)
-                    except Exception as e:
-                        print(f"Error in line plot: {str(e)}")
-                        # If line plot fails, at least show the bar chart
-                        ax2.set_ylabel("No line data available", color="gray")
-                    
-                    # Add title
-                    plt.title(f"{var_line} by {var_bar} (Dual Axis)")
-                    
-                    # Add legends for both axes
-                    lines1, labels1 = ax1.get_legend_handles_labels()
-                    lines2, labels2 = ax2.get_legend_handles_labels()
-                    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
-                    
-                    # Adjust layout
-                    fig.tight_layout()
-                    
-                    # Return the primary axis for maidr
-                    ax = ax1
             return ax
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
