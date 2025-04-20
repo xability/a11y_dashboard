@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import uuid
 from maidr.widget.shiny import render_maidr
 from shiny import App, reactive, render, ui
 from shiny.types import FileInfo
@@ -15,6 +16,8 @@ from plots.barplot import create_barplot, create_custom_barplot
 from plots.lineplot import create_lineplot, create_custom_lineplot
 from plots.heatmap import create_heatmap, create_custom_heatmap
 from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
+from plots.multilayerplot import create_multilayer_plot, create_custom_multilayer_plot
+from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
 
 # Set random seed
 np.random.seed(1000)
@@ -65,7 +68,7 @@ app_ui = ui.page_fluid(
         ),
         # First tab: Histogram with dropdowns and plot
         ui.nav_panel(
-            "Tutorial - Histogram",
+            "Histogram",
             ui.input_select(
                 "distribution_type",
                 "Select histogram distribution type:",
@@ -89,7 +92,7 @@ app_ui = ui.page_fluid(
         ),
         # Second tab: Box Plot with a single variable for Tutorial
         ui.nav_panel(
-            "Tutorial - Box Plot",
+            "Box Plot",
             ui.input_select(
                 "boxplot_type",
                 "Select box plot type:",
@@ -111,7 +114,7 @@ app_ui = ui.page_fluid(
         ),
         # Third tab: Scatter Plot with dropdowns and plot
         ui.nav_panel(
-            "Tutorial - Scatter Plot",
+            "Scatter Plot",
             ui.input_select(
                 "scatterplot_type",
                 "Select scatter plot type:",
@@ -134,7 +137,7 @@ app_ui = ui.page_fluid(
         ),
         # Fourth tab: Bar Plot with dropdowns and plot
         ui.nav_panel(
-            "Tutorial - Bar Plot",
+            "Bar Plot",
             ui.input_select(
                 "barplot_color",
                 "Select bar plot color:",
@@ -145,7 +148,7 @@ app_ui = ui.page_fluid(
         ),
         # New tab: Line Plot
         ui.nav_panel(
-            "Tutorial - Line Plot",
+            "Line Plot",
             ui.input_select(
                 "lineplot_type",
                 "Select line plot type:",
@@ -167,7 +170,7 @@ app_ui = ui.page_fluid(
         ),
         # New tab: Heatmap
         ui.nav_panel(
-            "Tutorial - Heatmap",
+            "Heatmap",
             ui.input_select(
                 "heatmap_type",
                 "Select heatmap type:",
@@ -182,7 +185,7 @@ app_ui = ui.page_fluid(
         ),
         # New tab: Multiline Plot
         ui.nav_panel(
-            "Tutorial - Multiline Plot",
+            "Multiline Plot",
             ui.input_select(
                 "multiline_type",
                 "Select multiline plot type:",
@@ -202,6 +205,40 @@ app_ui = ui.page_fluid(
             ),
             ui.output_ui("create_multiline_plot_output"),
         ),
+        # New tab: Multilayer Plot
+        ui.nav_panel(
+            "Multilayer Plot",
+            ui.input_select(
+                "multilayer_background_type",
+                "Select background plot type:",
+                choices=[
+                    "Bar Plot",
+                    "Histogram",
+                    "Scatter Plot"
+                ],
+                selected="Bar Plot",
+            ),
+            ui.input_select(
+                "multilayer_background_color",
+                "Select background color:",
+                choices=list(color_palettes.keys()),
+                selected="Default",
+            ),
+            ui.input_select(
+                "multilayer_line_color",
+                "Select line color:",
+                choices=list(color_palettes.keys()),
+                selected="Default",
+            ),
+            ui.output_ui("create_multilayer_plot_output"),
+        ),
+        
+        # New tab: Multipanel Plot
+        ui.nav_panel(
+            "Multipanel Plot",
+            ui.p("Three-panel plot with line plot and bar plots"),
+            ui.output_ui("create_multipanel_plot_output"),
+        ),
         
     ),
 )
@@ -219,58 +256,100 @@ def server(input, output, session):
     async def update_theme():
         await session.send_custom_message("update_theme", input.theme())
 
-    # Tutorial - Histogram Plot
+    # Histogram Plot
     @output
     @render_maidr
     def create_histogram_output():
+        # Explicitly reference all relevant inputs for reactivity
+        _ = input.distribution_type()
+        _ = input.hist_color()
+        _ = input.theme()
         return create_histogram(input.distribution_type(), input.hist_color(), input.theme())
 
-    # Tutorial - Box Plot
+    # Box Plot
     @output
     @render_maidr
     def create_boxplot_output():
+        _ = input.boxplot_type()
+        _ = input.boxplot_color()
+        _ = input.theme()
         return create_boxplot(input.boxplot_type(), input.boxplot_color(), input.theme())
 
-    # Tutorial - Scatter Plot
+    # Scatter Plot
     @output
     @render_maidr
     def create_scatterplot_output():
+        _ = input.scatterplot_type()
+        _ = input.scatter_color()
+        _ = input.theme()
         return create_scatterplot(input.scatterplot_type(), input.scatter_color(), input.theme())
 
-    # Tutorial - Bar Plot
+    # Bar Plot
     @output
     @render_maidr
     def create_barplot_output():
+        _ = input.barplot_color()
+        _ = input.theme()
         return create_barplot(input.barplot_color(), input.theme())
 
-    # Tutorial - Line Plot
+    # Line Plot
     @output
     @render_maidr
     def create_lineplot_output():
+        _ = input.lineplot_type()
+        _ = input.lineplot_color()
+        _ = input.theme()
         return create_lineplot(input.lineplot_type(), input.lineplot_color(), input.theme())
 
-    # Tutorial - Heatmap
+    # Heatmap
     @output
     @render_maidr
     def create_heatmap_output():
+        _ = input.heatmap_type()
+        _ = input.theme()
         return create_heatmap(input.heatmap_type(), input.theme())
 
-    # Tutorial - Multiline Plot
+    # Multiline Plot
     @reactive.Effect
-    @reactive.event(input.multiline_type)
+    @reactive.event(input.multiline_type, input.multiline_color, input.theme)
     def update_multiline_data():
         multiline_data.set(generate_multiline_data(input.multiline_type()))
     
     @output
     @render_maidr
     def create_multiline_plot_output():
+        # Explicitly reference all relevant inputs for reactivity
+        _ = input.multiline_type()
+        _ = input.multiline_color()
+        _ = input.theme()
         # Initialize data if it hasn't been done yet
         if multiline_data.get() is None:
             update_multiline_data()
-        
         # Get the stored data and create the plot
         data = multiline_data.get()
         return create_multiline_plot(data, input.multiline_type(), input.multiline_color(), input.theme())
+
+    # Multilayer Plot
+    @output
+    @render_maidr
+    def create_multilayer_plot_output():
+        _ = input.multilayer_background_type()
+        _ = input.multilayer_background_color()
+        _ = input.multilayer_line_color()
+        _ = input.theme()
+        return create_multilayer_plot(
+            input.multilayer_background_type(), 
+            input.multilayer_background_color(), 
+            input.multilayer_line_color(), 
+            input.theme()
+        )
+
+    # Multipanel Plot
+    @output
+    @render_maidr
+    def create_multipanel_plot_output():
+        _ = input.theme()
+        return create_multipanel_plot("Column", "Default", input.theme())
 
     # Practice Tab Logic
     @reactive.Effect
@@ -295,6 +374,8 @@ def server(input, output, session):
                     "Line Plot",
                     "Heatmap",
                     "Multiline Plot",
+                    "Multilayer Plot",
+                    "Multipanel Plot"
                 ],
             )
             ui.update_select("var_boxplot_x", choices=[""] + numeric_vars)
@@ -336,7 +417,9 @@ def server(input, output, session):
                         "Bar Plot",
                         "Line Plot",
                         "Heatmap",
-                        "Multiline Plot"
+                        "Multiline Plot",
+                        "Multilayer Plot",
+                        "Multipanel Plot"
                     ],
                     selected="",
                 ),
@@ -448,6 +531,145 @@ def server(input, output, session):
                         selected="Default",
                     )
                 )
+            elif plot_type == "Multilayer Plot":
+                return ui.div(
+                    ui.input_select(
+                        "var_multilayer_x", 
+                        "Select X variable (categorical):", 
+                        choices=[""] + categorical_vars + numeric_vars
+                    ),
+                    ui.input_select(
+                        "var_multilayer_background", 
+                        "Select Background variable (numeric):", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "var_multilayer_line", 
+                        "Select Line variable (numeric):", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "multilayer_background_type", 
+                        "Select background plot type:", 
+                        choices=["Bar Plot", "Histogram", "Scatter Plot"],
+                        selected="Bar Plot"
+                    ),
+                    ui.input_select(
+                        "multilayer_background_color",
+                        "Select background color:",
+                        choices=list(color_palettes.keys()),
+                        selected="Default",
+                    ),
+                    ui.input_select(
+                        "multilayer_line_color",
+                        "Select line color:",
+                        choices=list(color_palettes.keys()),
+                        selected="Default",
+                    )
+                )
+            elif plot_type == "Multipanel Plot":
+                return ui.div(
+                    ui.input_select(
+                        "multipanel_layout_custom", 
+                        "Select layout type:", 
+                        choices=["Grid 2x2", "Row", "Column", "Mixed"],
+                        selected="Grid 2x2"
+                    ),
+                    ui.input_select(
+                        "multipanel_color_custom",
+                        "Select color palette:",
+                        choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
+                        selected="Default",
+                    ),
+                    ui.h4("Subplot 1:"),
+                    ui.input_select(
+                        "multipanel_plot1_type", 
+                        "Plot type:", 
+                        choices=["line", "bar", "scatter", "hist", "multiline"],
+                        selected="line"
+                    ),
+                    ui.input_select(
+                        "multipanel_plot1_x", 
+                        "X variable:", 
+                        choices=[""] + all_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot1_y", 
+                        "Y variable:", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot1_group", 
+                        "Group variable (for multiline):", 
+                        choices=[""] + categorical_vars
+                    ),
+                    ui.h4("Subplot 2:"),
+                    ui.input_select(
+                        "multipanel_plot2_type", 
+                        "Plot type:", 
+                        choices=["line", "bar", "scatter", "hist", "multiline"],
+                        selected="bar"
+                    ),
+                    ui.input_select(
+                        "multipanel_plot2_x", 
+                        "X variable:", 
+                        choices=[""] + all_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot2_y", 
+                        "Y variable:", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot2_group", 
+                        "Group variable (for multiline):", 
+                        choices=[""] + categorical_vars
+                    ),
+                    ui.h4("Subplot 3:"),
+                    ui.input_select(
+                        "multipanel_plot3_type", 
+                        "Plot type:", 
+                        choices=["line", "bar", "scatter", "hist", "multiline"],
+                        selected="scatter"
+                    ),
+                    ui.input_select(
+                        "multipanel_plot3_x", 
+                        "X variable:", 
+                        choices=[""] + all_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot3_y", 
+                        "Y variable:", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot3_group", 
+                        "Group variable (for multiline):", 
+                        choices=[""] + categorical_vars
+                    ),
+                    ui.h4("Subplot 4:"),
+                    ui.input_select(
+                        "multipanel_plot4_type", 
+                        "Plot type:", 
+                        choices=["line", "bar", "scatter", "hist", "multiline"],
+                        selected="hist"
+                    ),
+                    ui.input_select(
+                        "multipanel_plot4_x", 
+                        "X variable:", 
+                        choices=[""] + all_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot4_y", 
+                        "Y variable:", 
+                        choices=[""] + numeric_vars
+                    ),
+                    ui.input_select(
+                        "multipanel_plot4_group", 
+                        "Group variable (for multiline):", 
+                        choices=[""] + categorical_vars
+                    )
+                )
         return ui.div()
 
     # Dynamic Y variable selection for Scatter Plot
@@ -549,6 +771,54 @@ def server(input, output, session):
                 var_group = input.var_multiline_group()
                 palette = input.multiline_palette()
                 return create_custom_multiline_plot(df, var_x, var_y, var_group, palette, theme)
+                
+            elif plot_type == "Multilayer Plot":
+                var_x = input.var_multilayer_x()
+                var_background = input.var_multilayer_background()
+                var_line = input.var_multilayer_line()
+                background_type = input.multilayer_background_type()
+                background_color = input.multilayer_background_color()
+                line_color = input.multilayer_line_color()
+                return create_custom_multilayer_plot(
+                    df, var_x, var_background, var_line, background_type, 
+                    background_color, line_color, theme
+                )
+                
+            elif plot_type == "Multipanel Plot":
+                # Create config dictionary for multipanel plot
+                vars_config = {
+                    'plot1': {
+                        'type': input.multipanel_plot1_type(),
+                        'x': input.multipanel_plot1_x(),
+                        'y': input.multipanel_plot1_y(),
+                        'group': input.multipanel_plot1_group()
+                    },
+                    'plot2': {
+                        'type': input.multipanel_plot2_type(),
+                        'x': input.multipanel_plot2_x(),
+                        'y': input.multipanel_plot2_y(),
+                        'group': input.multipanel_plot2_group()
+                    },
+                    'plot3': {
+                        'type': input.multipanel_plot3_type(),
+                        'x': input.multipanel_plot3_x(),
+                        'y': input.multipanel_plot3_y(),
+                        'group': input.multipanel_plot3_group()
+                    },
+                    'plot4': {
+                        'type': input.multipanel_plot4_type(),
+                        'x': input.multipanel_plot4_x(),
+                        'y': input.multipanel_plot4_y(),
+                        'group': input.multipanel_plot4_group()
+                    }
+                }
+                
+                layout_type = input.multipanel_layout_custom()
+                color_palette = input.multipanel_color_custom()
+                
+                return create_custom_multipanel_plot(
+                    df, vars_config, layout_type, color_palette, theme
+                )
                 
             return None
         except Exception as e:
