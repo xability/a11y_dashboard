@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import uuid
+import os
+import base64
+import io
+from pathlib import Path
+from matplotlib.backends.backend_svg import FigureCanvasSVG
 from maidr.widget.shiny import render_maidr
 from shiny import App, reactive, render, ui
 from shiny.types import FileInfo
@@ -63,7 +68,14 @@ app_ui = ui.page_fluid(
                     ui.output_ui("variable_input"),  # Variable input for specific plot
                 ),
                 # Right column for the plot (50% width)
-                ui.column(6, ui.output_ui("create_custom_plot")),
+                ui.column(6, 
+                    ui.div(
+                        ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
+                                              class_="btn btn-primary"),
+                        class_="text-center mb-3"
+                    ),
+                    ui.output_ui("create_custom_plot")
+                ),
             ),
         ),
         # First tab: Histogram with dropdowns and plot
@@ -249,6 +261,8 @@ def server(input, output, session):
     uploaded_data = reactive.Value(None)
     # Add a reactive value to store multiline plot data
     multiline_data = reactive.Value(None)
+    # Add reactive value to store the current figure
+    current_figure = reactive.Value(None)
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -261,95 +275,92 @@ def server(input, output, session):
     @render_maidr
     def create_histogram_output():
         # Explicitly reference all relevant inputs for reactivity
-        _ = input.distribution_type()
-        _ = input.hist_color()
-        _ = input.theme()
-        return create_histogram(input.distribution_type(), input.hist_color(), input.theme())
+        distribution_type = input.distribution_type()
+        hist_color = input.hist_color()
+        theme = input.theme()
+        return create_histogram(distribution_type, hist_color, theme)
 
     # Box Plot
     @output
     @render_maidr
     def create_boxplot_output():
-        _ = input.boxplot_type()
-        _ = input.boxplot_color()
-        _ = input.theme()
-        return create_boxplot(input.boxplot_type(), input.boxplot_color(), input.theme())
+        boxplot_type = input.boxplot_type()
+        boxplot_color = input.boxplot_color()
+        theme = input.theme()
+        return create_boxplot(boxplot_type, boxplot_color, theme)
 
     # Scatter Plot
     @output
     @render_maidr
     def create_scatterplot_output():
-        _ = input.scatterplot_type()
-        _ = input.scatter_color()
-        _ = input.theme()
-        return create_scatterplot(input.scatterplot_type(), input.scatter_color(), input.theme())
+        scatterplot_type = input.scatterplot_type()
+        scatter_color = input.scatter_color()
+        theme = input.theme()
+        return create_scatterplot(scatterplot_type, scatter_color, theme)
 
     # Bar Plot
     @output
     @render_maidr
     def create_barplot_output():
-        _ = input.barplot_color()
-        _ = input.theme()
-        return create_barplot(input.barplot_color(), input.theme())
+        barplot_color = input.barplot_color()
+        theme = input.theme()
+        return create_barplot(barplot_color, theme)
 
     # Line Plot
     @output
     @render_maidr
     def create_lineplot_output():
-        _ = input.lineplot_type()
-        _ = input.lineplot_color()
-        _ = input.theme()
-        return create_lineplot(input.lineplot_type(), input.lineplot_color(), input.theme())
+        lineplot_type = input.lineplot_type()
+        lineplot_color = input.lineplot_color()
+        theme = input.theme()
+        return create_lineplot(lineplot_type, lineplot_color, theme)
 
     # Heatmap
     @output
     @render_maidr
     def create_heatmap_output():
-        _ = input.heatmap_type()
-        _ = input.theme()
-        return create_heatmap(input.heatmap_type(), input.theme())
+        heatmap_type = input.heatmap_type()
+        theme = input.theme()
+        return create_heatmap(heatmap_type, theme)
 
     # Multiline Plot
-    @reactive.Effect
-    @reactive.event(input.multiline_type, input.multiline_color, input.theme)
-    def update_multiline_data():
-        multiline_data.set(generate_multiline_data(input.multiline_type()))
+    # First, create a reactive calculation for the multiline data
+    @reactive.Calc
+    def get_multiline_data():
+        return generate_multiline_data(input.multiline_type())
     
     @output
     @render_maidr
     def create_multiline_plot_output():
         # Explicitly reference all relevant inputs for reactivity
-        _ = input.multiline_type()
-        _ = input.multiline_color()
-        _ = input.theme()
-        # Initialize data if it hasn't been done yet
-        if multiline_data.get() is None:
-            update_multiline_data()
-        # Get the stored data and create the plot
-        data = multiline_data.get()
-        return create_multiline_plot(data, input.multiline_type(), input.multiline_color(), input.theme())
+        multiline_type = input.multiline_type()
+        multiline_color = input.multiline_color()
+        theme = input.theme()
+        # Get the data using the reactive calculation
+        data = get_multiline_data()
+        return create_multiline_plot(data, multiline_type, multiline_color, theme)
 
     # Multilayer Plot
     @output
     @render_maidr
     def create_multilayer_plot_output():
-        _ = input.multilayer_background_type()
-        _ = input.multilayer_background_color()
-        _ = input.multilayer_line_color()
-        _ = input.theme()
+        multilayer_background_type = input.multilayer_background_type()
+        multilayer_background_color = input.multilayer_background_color()
+        multilayer_line_color = input.multilayer_line_color()
+        theme = input.theme()
         return create_multilayer_plot(
-            input.multilayer_background_type(), 
-            input.multilayer_background_color(), 
-            input.multilayer_line_color(), 
-            input.theme()
+            multilayer_background_type, 
+            multilayer_background_color, 
+            multilayer_line_color, 
+            theme
         )
 
     # Multipanel Plot
     @output
     @render_maidr
     def create_multipanel_plot_output():
-        _ = input.theme()
-        return create_multipanel_plot("Column", "Default", input.theme())
+        theme = input.theme()
+        return create_multipanel_plot("Column", "Default", theme)
 
     # Practice Tab Logic
     @reactive.Effect
@@ -735,42 +746,58 @@ def server(input, output, session):
             return None
 
         try:
+            fig = plt.figure()
             if plot_type == "Histogram":
                 var = input.var_histogram()
-                return create_custom_histogram(df, var, color, theme)
+                result = create_custom_histogram(df, var, color, theme)
+                # Store the figure for download
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Box Plot":
                 var_x = input.var_boxplot_x()
                 var_y = input.var_boxplot_y()
-                return create_custom_boxplot(df, var_x, var_y, color, theme)
+                result = create_custom_boxplot(df, var_x, var_y, color, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Scatter Plot":
                 var_x = input.var_scatter_x()
                 var_y = input.var_scatter_y()
-                return create_custom_scatterplot(df, var_x, var_y, color, theme)
+                result = create_custom_scatterplot(df, var_x, var_y, color, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Bar Plot":
                 var = input.var_bar_plot()
-                return create_custom_barplot(df, var, color, theme)
+                result = create_custom_barplot(df, var, color, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Line Plot":
                 var_x = input.var_line_x()
                 var_y = input.var_line_y()
-                return create_custom_lineplot(df, var_x, var_y, color, theme)
+                result = create_custom_lineplot(df, var_x, var_y, color, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Heatmap":
                 var_x = input.var_heatmap_x()
                 var_y = input.var_heatmap_y()
                 var_value = input.var_heatmap_value()
                 colorscale = input.heatmap_colorscale()
-                return create_custom_heatmap(df, var_x, var_y, var_value, colorscale, theme)
+                result = create_custom_heatmap(df, var_x, var_y, var_value, colorscale, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Multiline Plot":
                 var_x = input.var_multiline_x()
                 var_y = input.var_multiline_y()
                 var_group = input.var_multiline_group()
                 palette = input.multiline_palette()
-                return create_custom_multiline_plot(df, var_x, var_y, var_group, palette, theme)
+                result = create_custom_multiline_plot(df, var_x, var_y, var_group, palette, theme)
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Multilayer Plot":
                 var_x = input.var_multilayer_x()
@@ -779,10 +806,12 @@ def server(input, output, session):
                 background_type = input.multilayer_background_type()
                 background_color = input.multilayer_background_color()
                 line_color = input.multilayer_line_color()
-                return create_custom_multilayer_plot(
+                result = create_custom_multilayer_plot(
                     df, var_x, var_background, var_line, background_type, 
                     background_color, line_color, theme
                 )
+                current_figure.set(plt.gcf())
+                return result
                 
             elif plot_type == "Multipanel Plot":
                 # Create config dictionary for multipanel plot
@@ -816,14 +845,44 @@ def server(input, output, session):
                 layout_type = input.multipanel_layout_custom()
                 color_palette = input.multipanel_color_custom()
                 
-                return create_custom_multipanel_plot(
+                result = create_custom_multipanel_plot(
                     df, vars_config, layout_type, color_palette, theme
                 )
+                current_figure.set(plt.gcf())
+                return result
                 
             return None
         except Exception as e:
             print(f"Error generating plot: {str(e)}")
             return None
+
+    # Handle saving SVG to Downloads folder
+    @reactive.effect
+    @reactive.event(input.save_svg_button)
+    def save_svg_to_downloads():
+        # Get the current figure
+        fig = current_figure.get()
+        
+        if fig is None:
+            ui.notification_show("No plot available to save", type="warning")
+            return
+        
+        try:
+            # Create a unique filename with timestamp
+            plot_type = input.plot_type() if input.plot_type() else "plot"
+            filename = f"{plot_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.svg"
+            
+            # Get the Downloads folder path
+            downloads_folder = str(Path.home() / "Downloads")
+            filepath = os.path.join(downloads_folder, filename)
+            
+            # Save the figure directly, avoid temporary figure creation
+            fig.savefig(filepath, format='svg', bbox_inches='tight')
+            
+            ui.notification_show(f"Plot saved to Downloads as {filename}", type="success")
+        except Exception as e:
+            ui.notification_show(f"Error saving plot: {str(e)}", type="error")
+            print(f"Error saving SVG: {str(e)}")
 
 
 # Create the app
