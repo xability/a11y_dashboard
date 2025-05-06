@@ -57,7 +57,7 @@ app_ui = ui.page_fluid(
         ),
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
-            "Practice",
+            "Create your own Custom Plot",
             ui.row(
                 # Left column for file upload, table, and conditional dropdowns (50% width)
                 ui.column(
