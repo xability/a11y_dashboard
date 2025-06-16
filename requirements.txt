@@ -2,3 +2,4 @@ maidr
 shiny
 seaborn
 pandas
+mplfinance
