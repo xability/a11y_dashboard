@@ -392,32 +392,25 @@ def server(input, output, session):
         theme = input.theme()
         return create_multipanel_plot("Column", "Default", theme)
 
-    # Candlestick Chart - MAIDR COMPLETELY BYPASSED
+    # Candlestick Chart
     @output
-    @render.ui  # Using render.ui instead of render_maidr to avoid maidr dependency
+    @render_maidr 
     def create_candlestick_output():
         try:
             candlestick_company = input.candlestick_company()
             candlestick_timeframe = input.candlestick_timeframe()
             theme = input.theme()
             
-            # Create the candlestick plot (no maidr dependency)
+            # Create the candlestick plot
             ax = create_candlestick(candlestick_company, candlestick_timeframe, theme)
             
-            # Convert to SVG for display
-            fig = ax.get_figure()
-            img = io.BytesIO()
-            FigureCanvasSVG(fig).print_svg(img)
-            img.seek(0)
-            svg_data = img.getvalue().decode("utf-8")
-            plt.close(fig)  # Close the figure to free memory
+            if ax is None:
+                return None
+            # For MAIDR rendering, return the axes object directly
+            return ax
             
-            # Store the figure for potential saving
-            current_figure.set(fig)
-            
-            return ui.HTML(svg_data)
         except Exception as e:
-            return ui.HTML(f"<div>Error creating candlestick chart: {str(e)}</div>")
+            return None
 
     # Practice Tab Logic
     @reactive.Effect
