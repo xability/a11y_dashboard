@@ -1,4 +1,5 @@
 maidr
+lxml
 shiny
 seaborn
 pandas
