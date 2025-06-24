@@ -3,4 +3,3 @@ shiny
 seaborn
 pandas
 mplfinance
-shinylive
