@@ -4,3 +4,5 @@ shiny
 seaborn
 pandas
 mplfinance
+htmltools
+wrapt
