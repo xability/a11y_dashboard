@@ -1,5 +1,8 @@
 maidr
+lxml
 shiny
 seaborn
 pandas
 mplfinance
+htmltools
+wrapt
