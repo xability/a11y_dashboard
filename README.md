@@ -71,7 +71,7 @@ Once all dependencies are installed, you can run the Shiny app.
 3. Open the provided URL (`http://127.0.0.1:8000`) in your browser to access the Shiny app.
 
 ### Additional Notes:
-- **Dummy Data**: The file `dummy_data_for_practice.csv` is included for you to test the app's functionality with dummy data. Please free to use your own data!
+- **Dummy Data**: The file `dummy_data_for_practice.csv` is included for you to test the app’s functionality with dummy data. Please free to use your own data!
 - **VS Code Configuration**: If you use VS Code, you may want to install the `Shiny for Python` extension, which will help you run the app and display the content in an in-window browser.
 
 ## Running the Shiny App in the Browser with Shinylive (Pyodide)
