@@ -29,4 +29,4 @@ jobs:
           RSCONNECT_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
         run: |
           rsconnect add --account "$RSCONNECT_ACCOUNT" --name "$RSCONNECT_ACCOUNT" --token "$RSCONNECT_TOKEN" --secret "$RSCONNECT_SECRET"
-          rsconnect deploy shiny app.py --account "$RSCONNECT_ACCOUNT" --name a11y-dashboard 
+          rsconnect deploy shiny . --account "$RSCONNECT_ACCOUNT" --name a11y-dashboard 
