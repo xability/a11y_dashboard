@@ -69,22 +69,25 @@ app_ui = ui.page_fluid(
         ui.nav_panel(
             "Create your own Custom Plot",
             ui.row(
-                # Left column for file upload, table, and conditional dropdowns (50% width)
+                # Left column for file upload, table, and conditional dropdowns (40% width)
                 ui.column(
-                    6,
+                    2,
                     ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
                     ui.output_table("data_types"),
                     ui.output_ui("plot_options"),  # Conditionally render dropdowns
                     ui.output_ui("variable_input"),  # Variable input for specific plot
                 ),
-                # Right column for the plot (50% width)
-                ui.column(6, 
+                # Right column for the plot (80% width)
+                ui.column(10, 
                     ui.div(
                         ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
                                               class_="btn btn-primary"),
                         class_="text-center mb-3"
                     ),
-                    ui.output_ui("create_custom_plot")
+                    ui.div(
+                        ui.output_ui("create_custom_plot"),
+                        style="width: 100%; max-width: 800px;"
+                    )
                 ),
             ),
         ),
