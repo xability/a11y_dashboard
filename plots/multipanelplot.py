@@ -66,6 +66,9 @@ def create_multipanel_plot(layout_type, color_palette, theme):
     # Create a figure with 3 subplots arranged vertically
     fig, axs = plt.subplots(3, 1, figsize=(10, 12))
     
+    # Make sure this figure is the current figure
+    plt.figure(fig.number)
+    
     # First panel: Line plot
     axs[0].plot(x_line, y_line, color="blue", linewidth=2)
     axs[0].set_title("Line Plot: Random Data")
@@ -151,6 +154,9 @@ def create_custom_multipanel_plot(df, vars_config, layout_type, color_palette, t
     
     # Create the figure with 3 subplots arranged vertically
     fig, axs = plt.subplots(3, 1, figsize=(10, 12))
+    
+    # Make sure this figure is the current figure
+    plt.figure(fig.number)
     
     # First panel
     if plot1_type == 'line':
