@@ -4,8 +4,8 @@
 
 The accessibility dashboard is available at the following endpoints:
 
-- **Primary**: https://xabilitylab.shinyapps.io/a11y_dashboard/
-- **Backup**: https://xabilitylab.ischool.illinois.edu/a11y_dashboard/
+- **Primary**: https://xabilitylab.ischool.illinois.edu/a11y_dashboard/
+- **Backup**: https://xabilitylab.shinyapps.io/a11y_dashboard/
 
 ## Dashboard Features
 
