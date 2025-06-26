@@ -9,6 +9,7 @@ import io
 from pathlib import Path
 from matplotlib.backends.backend_svg import FigureCanvasSVG
 from maidr.widget.shiny import render_maidr
+import maidr
 from shiny import App, reactive, render, ui
 from shiny.types import FileInfo
 
@@ -55,27 +56,38 @@ app_ui = ui.page_fluid(
                     "theme", "Theme:", choices=["Light", "Dark"], selected="Light"
                 )
             ),
+            ui.nav_control(
+                ui.input_action_button(
+                    "save_html_button", 
+                    "Save HTML", 
+                    class_="btn btn-secondary",
+                    style="margin-left: 10px;"
+                )
+            ),
         ),
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
             "Create your own Custom Plot",
             ui.row(
-                # Left column for file upload, table, and conditional dropdowns (50% width)
+                # Left column for file upload, table, and conditional dropdowns (40% width)
                 ui.column(
-                    6,
+                    2,
                     ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
                     ui.output_table("data_types"),
                     ui.output_ui("plot_options"),  # Conditionally render dropdowns
                     ui.output_ui("variable_input"),  # Variable input for specific plot
                 ),
-                # Right column for the plot (50% width)
-                ui.column(6, 
+                # Right column for the plot (80% width)
+                ui.column(10, 
                     ui.div(
                         ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
                                               class_="btn btn-primary"),
                         class_="text-center mb-3"
                     ),
-                    ui.output_ui("create_custom_plot")
+                    ui.div(
+                        ui.output_ui("create_custom_plot"),
+                        style="width: 100%; max-width: 800px;"
+                    )
                 ),
             ),
         ),
@@ -293,6 +305,8 @@ def server(input, output, session):
     multiline_data = reactive.Value(None)
     # Add reactive value to store the current figure
     current_figure = reactive.Value(None)
+    # Add reactive value to store the current maidr object
+    current_maidr = reactive.Value(None)
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -308,7 +322,11 @@ def server(input, output, session):
         distribution_type = input.distribution_type()
         hist_color = input.hist_color()
         theme = input.theme()
-        return create_histogram(distribution_type, hist_color, theme)
+        result = create_histogram(distribution_type, hist_color, theme)
+        # Store the maidr object for HTML saving
+        if hasattr(result, '_maidr_obj'):
+            current_maidr.set(result._maidr_obj)
+        return result
 
     # Box Plot
     @output
@@ -933,6 +951,37 @@ def server(input, output, session):
         except Exception as e:
             ui.notification_show(f"Error saving plot: {str(e)}", type="error")
             print(f"Error saving SVG: {str(e)}")
+
+    # Handle saving HTML to Downloads folder
+    @reactive.effect
+    @reactive.event(input.save_html_button)
+    def save_html_to_downloads():
+        try:
+            # Create a unique filename with timestamp
+            filename = f"accessible_plot_{uuid.uuid4().hex[:8]}.html"
+            
+            # Get the Downloads folder path
+            downloads_folder = str(Path.home() / "Downloads")
+            filepath = os.path.join(downloads_folder, filename)
+            
+            # Get the current figure
+            fig = current_figure.get()
+            if fig is None:
+                # Try to get the current plot from matplotlib
+                fig = plt.gcf()
+                if fig.get_axes():
+                    current_figure.set(fig)
+                else:
+                    ui.notification_show("No plot available to save", type="warning")
+                    return
+            
+            # Use maidr.save_html directly
+            maidr.save_html(fig, filepath)
+            
+            ui.notification_show(f"Accessible plot saved to Downloads as {filename}", type="success")
+        except Exception as e:
+            ui.notification_show(f"Error saving HTML: {str(e)}", type="error")
+            print(f"Error saving HTML: {str(e)}")
 
 
 # Create the app

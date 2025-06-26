@@ -7,3 +7,4 @@ mplfinance
 htmltools
 wrapt
 statsmodels
+jinja2
