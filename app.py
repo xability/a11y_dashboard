@@ -26,6 +26,9 @@ from plots.multilayerplot import create_multilayer_plot, create_custom_multilaye
 from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
 from plots.candlestick import create_candlestick
 
+# Import help menu module
+from HelpMenu import get_help_modal, QUICK_HELP_TIPS
+
 # Set random seed
 np.random.seed(1000)
 
@@ -70,6 +73,11 @@ app_ui = ui.page_fluid(
             
             Shiny.addCustomMessageHandler("announce", function(message) {
                 announceToScreenReader(message);
+            });
+            
+            Shiny.addCustomMessageHandler("show_help", function(message) {
+                // Trigger the help modal
+                Shiny.setInputValue("show_help_modal", Math.random());
             });
             
             function announceToScreenReader(message) {
@@ -118,6 +126,53 @@ app_ui = ui.page_fluid(
                     childList: true,
                     subtree: true
                 });
+                
+                // Add keyboard event listener for help menu
+                document.addEventListener('keydown', function(event) {
+                    var activeElement = document.activeElement;
+                    var isInputField = activeElement && (
+                        activeElement.tagName === 'INPUT' || 
+                        activeElement.tagName === 'TEXTAREA' || 
+                        activeElement.tagName === 'SELECT' ||
+                        activeElement.isContentEditable
+                    );
+                    
+                    // Check if 'h' key is pressed (not in input fields)
+                    if (event.key === 'h' || event.key === 'H') {
+                        // Only trigger help if not in an input field
+                        if (!isInputField) {
+                            event.preventDefault();
+                            
+                            // Check if help modal is currently open
+                            var helpModal = document.querySelector('#help_modal');
+                            var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
+                                            helpModal.classList.contains('show');
+                            
+                            if (isModalOpen) {
+                                // If modal is open, close it
+                                Shiny.setInputValue("close_help", Math.random());
+                                announceToScreenReader('Help menu closed.');
+                            } else {
+                                // If modal is closed, open it
+                                Shiny.setInputValue("show_help_modal", Math.random());
+                                announceToScreenReader('Help menu opened. Use Tab to navigate through help sections.');
+                            }
+                        }
+                    }
+                    
+                    // Check if ESC key is pressed to close help menu
+                    if (event.key === 'Escape') {
+                        var helpModal = document.querySelector('#help_modal');
+                        var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
+                                        helpModal.classList.contains('show');
+                        
+                        if (isModalOpen) {
+                            event.preventDefault();
+                            Shiny.setInputValue("close_help", Math.random());
+                            announceToScreenReader('Help menu closed.');
+                        }
+                    }
+                });
             });
         """
         ),
@@ -146,6 +201,15 @@ app_ui = ui.page_fluid(
                     "Save HTML", 
                     class_="btn btn-secondary",
                     style="margin-left: 10px;"
+                )
+            ),
+            ui.nav_control(
+                ui.input_action_button(
+                    "help_button", 
+                    "📚 Help (h)", 
+                    class_="btn btn-info",
+                    style="margin-left: 10px;",
+                    title="Open help menu - keyboard shortcut: press 'h'"
                 )
             ),
         ),
@@ -393,6 +457,32 @@ def server(input, output, session):
     async def announce_to_screen_reader(message):
         """Send ARIA announcements to screen readers"""
         await session.send_custom_message("announce", message)
+
+    # Handle help modal display
+    @reactive.effect
+    @reactive.event(input.show_help_modal)
+    async def show_help():
+        """Display the help modal when triggered"""
+        modal = get_help_modal()
+        ui.modal_show(modal)
+        await announce_to_screen_reader("Help menu is now open. Navigate through sections using Tab key.")
+
+    # Handle help modal close
+    @reactive.effect
+    @reactive.event(input.close_help)
+    async def close_help():
+        """Close the help modal"""
+        ui.modal_remove()
+        await announce_to_screen_reader("Help menu closed. You can press 'h' anytime to reopen it.")
+
+    # Handle help button click
+    @reactive.effect
+    @reactive.event(input.help_button)
+    async def help_button_clicked():
+        """Show help modal when help button is clicked"""
+        modal = get_help_modal()
+        ui.modal_show(modal)
+        await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
 
     # Update the theme based on the selected option
     @reactive.effect
