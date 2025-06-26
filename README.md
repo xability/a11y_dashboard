@@ -7,6 +7,12 @@ The accessibility dashboard is available at the following endpoints:
 - **Primary**: https://xabilitylab.shinyapps.io/a11y_dashboard/
 - **Backup**: https://xabilitylab.ischool.illinois.edu/a11y_dashboard/
 
+Both endpoints are identical from a user’s perspective; the difference lies in how they’re hosted:
+
+Primary endpoint runs on a remote Python-backed Shiny server (shinyapps.io), offering fast, automatically scaled performance.
+
+Backup endpoint is delivered as a static WebAssembly bundle via Shinylive; everything runs in your browser using Pyodide, with no server backend—may feel slightly slower on older or less powerful machines.
+
 ## Dashboard Features
 
 ### Overview
