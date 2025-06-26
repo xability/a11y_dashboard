@@ -6,3 +6,4 @@ pandas
 mplfinance
 htmltools
 wrapt
+statsmodels
