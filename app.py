@@ -212,27 +212,38 @@ app_ui = ui.page_fluid(
                     title="Open help menu - keyboard shortcut: press 'h'"
                 )
             ),
+            ui.nav_control(
+                ui.input_action_button(
+                    "save_html_button", 
+                    "Save HTML", 
+                    class_="btn btn-secondary",
+                    style="margin-left: 10px;"
+                )
+            ),
         ),
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
             "Create your own Custom Plot",
             ui.row(
-                # Left column for file upload, table, and conditional dropdowns (50% width)
+                # Left column for file upload, table, and conditional dropdowns (40% width)
                 ui.column(
-                    6,
+                    2,
                     ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
                     ui.output_table("data_types"),
                     ui.output_ui("plot_options"),  # Conditionally render dropdowns
                     ui.output_ui("variable_input"),  # Variable input for specific plot
                 ),
-                # Right column for the plot (50% width)
-                ui.column(6, 
+                # Right column for the plot (80% width)
+                ui.column(10, 
                     ui.div(
                         ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
                                               class_="btn btn-primary"),
                         class_="text-center mb-3"
                     ),
-                    ui.output_ui("create_custom_plot")
+                    ui.div(
+                        ui.output_ui("create_custom_plot"),
+                        style="width: 100%; max-width: 800px;"
+                    )
                 ),
             ),
         ),
@@ -526,7 +537,6 @@ def server(input, output, session):
         distribution_type = input.distribution_type()
         hist_color = input.hist_color()
         theme = input.theme()
-        
         # Announce plot generation
         await announce_to_screen_reader(f"Generating {distribution_type.lower()} histogram with {hist_color.lower()} color scheme")
         
@@ -538,7 +548,6 @@ def server(input, output, session):
             
         # Announce plot completion
         await announce_to_screen_reader(f"Histogram plot completed. Showing {distribution_type.lower()} distribution. Plot is now accessible for exploration.")
-        
         return result
 
     # Box Plot
@@ -1322,7 +1331,6 @@ def server(input, output, session):
     async def save_html_to_downloads():
         # Announce save process start
         await announce_to_screen_reader("Saving accessible plot as HTML file to Downloads folder...")
-        
         try:
             # Create a unique filename with timestamp
             filename = f"accessible_plot_{uuid.uuid4().hex[:8]}.html"
