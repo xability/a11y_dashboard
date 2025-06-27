@@ -26,6 +26,9 @@ from plots.multilayerplot import create_multilayer_plot, create_custom_multilaye
 from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
 from plots.candlestick import create_candlestick
 
+# Import help menu module
+from HelpMenu import get_help_modal, QUICK_HELP_TIPS
+
 # Set random seed
 np.random.seed(1000)
 
@@ -37,6 +40,24 @@ app_ui = ui.page_fluid(
             """
             body.dark-theme { background-color: #2E2E2E; color: white; }
             body.light-theme { background-color: white; color: black; }
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border: 0;
+            }
+            #aria-announcements {
+                position: absolute;
+                left: -10000px;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+            }
         """
         ),
         ui.tags.script(
@@ -44,16 +65,151 @@ app_ui = ui.page_fluid(
             Shiny.addCustomMessageHandler("update_theme", function(theme) {
                 document.body.classList.toggle("dark-theme", theme === "Dark");
                 document.body.classList.toggle("light-theme", theme === "Light");
+                
+                // Announce theme change
+                var announcement = "Theme changed to " + theme + " mode";
+                announceToScreenReader(announcement);
+            });
+            
+            Shiny.addCustomMessageHandler("announce", function(message) {
+                announceToScreenReader(message);
+            });
+            
+            Shiny.addCustomMessageHandler("show_help", function(message) {
+                // Trigger the help modal
+                Shiny.setInputValue("show_help_modal", Math.random());
+            });
+            
+            function announceToScreenReader(message) {
+                var ariaLive = document.getElementById('aria-announcements');
+                if (!ariaLive) {
+                    ariaLive = document.createElement('div');
+                    ariaLive.id = 'aria-announcements';
+                    ariaLive.setAttribute('aria-live', 'polite');
+                    ariaLive.setAttribute('aria-atomic', 'true');
+                    ariaLive.style.position = 'absolute';
+                    ariaLive.style.left = '-10000px';
+                    ariaLive.style.width = '1px';
+                    ariaLive.style.height = '1px';
+                    ariaLive.style.overflow = 'hidden';
+                    document.body.appendChild(ariaLive);
+                }
+                
+                // Clear previous message and add new one
+                ariaLive.textContent = '';
+                setTimeout(function() {
+                    ariaLive.textContent = message;
+                }, 100);
+            }
+            
+            // Announce when plots are loaded
+            document.addEventListener('DOMContentLoaded', function() {
+                // Watch for plot updates
+                var observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                            for (var i = 0; i < mutation.addedNodes.length; i++) {
+                                var node = mutation.addedNodes[i];
+                                if (node.nodeType === 1) { // Element node
+                                    if (node.querySelector && node.querySelector('svg, canvas, img')) {
+                                        announceToScreenReader('Plot has been updated and is now available for exploration');
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                // Start observing
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                // Add keyboard event listener for help menu
+                document.addEventListener('keydown', function(event) {
+                    var activeElement = document.activeElement;
+                    var isInputField = activeElement && (
+                        activeElement.tagName === 'INPUT' || 
+                        activeElement.tagName === 'TEXTAREA' || 
+                        activeElement.tagName === 'SELECT' ||
+                        activeElement.isContentEditable
+                    );
+                    
+                    // Check if 'h' key is pressed (not in input fields)
+                    if (event.key === 'h' || event.key === 'H') {
+                        // Only trigger help if not in an input field
+                        if (!isInputField) {
+                            event.preventDefault();
+                            
+                            // Check if help modal is currently open
+                            var helpModal = document.querySelector('#help_modal');
+                            var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
+                                            helpModal.classList.contains('show');
+                            
+                            if (isModalOpen) {
+                                // If modal is open, close it
+                                Shiny.setInputValue("close_help", Math.random());
+                                announceToScreenReader('Help menu closed.');
+                            } else {
+                                // If modal is closed, open it
+                                Shiny.setInputValue("show_help_modal", Math.random());
+                                announceToScreenReader('Help menu opened. Use Tab to navigate through help sections.');
+                            }
+                        }
+                    }
+                    
+                    // Check if ESC key is pressed to close help menu
+                    if (event.key === 'Escape') {
+                        var helpModal = document.querySelector('#help_modal');
+                        var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
+                                        helpModal.classList.contains('show');
+                        
+                        if (isModalOpen) {
+                            event.preventDefault();
+                            Shiny.setInputValue("close_help", Math.random());
+                            announceToScreenReader('Help menu closed.');
+                        }
+                    }
+                });
             });
         """
         ),
+    ),
+    # ARIA live region for announcements
+    ui.div(
+        id="aria-announcements",
+        role="status",
+        **{"aria-live": "polite", "aria-atomic": "true"},
+        class_="sr-only"
     ),
     ui.navset_tab(
         ui.nav_menu(
             "Settings",
             ui.nav_control(
                 ui.input_select(
-                    "theme", "Theme:", choices=["Light", "Dark"], selected="Light"
+                    "theme", 
+                    "Theme:", 
+                    choices=["Light", "Dark"], 
+                    selected="Light"
+                )
+            ),
+            ui.nav_control(
+                ui.input_action_button(
+                    "save_html_button", 
+                    "Save HTML", 
+                    class_="btn btn-secondary",
+                    style="margin-left: 10px;"
+                )
+            ),
+            ui.nav_control(
+                ui.input_action_button(
+                    "help_button", 
+                    "📚 Help (h)", 
+                    class_="btn btn-info",
+                    style="margin-left: 10px;",
+                    title="Open help menu - keyboard shortcut: press 'h'"
                 )
             ),
             ui.nav_control(
@@ -308,68 +464,199 @@ def server(input, output, session):
     # Add reactive value to store the current maidr object
     current_maidr = reactive.Value(None)
 
+    # Helper function to announce messages to screen readers
+    async def announce_to_screen_reader(message):
+        """Send ARIA announcements to screen readers"""
+        await session.send_custom_message("announce", message)
+
+    # Handle help modal display
+    @reactive.effect
+    @reactive.event(input.show_help_modal)
+    async def show_help():
+        """Display the help modal when triggered"""
+        modal = get_help_modal()
+        ui.modal_show(modal)
+        await announce_to_screen_reader("Help menu is now open. Navigate through sections using Tab key.")
+
+    # Handle help modal close
+    @reactive.effect
+    @reactive.event(input.close_help)
+    async def close_help():
+        """Close the help modal"""
+        ui.modal_remove()
+        await announce_to_screen_reader("Help menu closed. You can press 'h' anytime to reopen it.")
+
+    # Handle help button click
+    @reactive.effect
+    @reactive.event(input.help_button)
+    async def help_button_clicked():
+        """Show help modal when help button is clicked"""
+        modal = get_help_modal()
+        ui.modal_show(modal)
+        await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
+
     # Update the theme based on the selected option
     @reactive.effect
     @reactive.event(input.theme)
     async def update_theme():
         await session.send_custom_message("update_theme", input.theme())
 
+    # Add reactive effects to announce changes to screen readers
+    @reactive.effect
+    async def announce_plot_type_change():
+        if uploaded_data.get() is not None and input.plot_type():
+            plot_type = input.plot_type()
+            await announce_to_screen_reader(f"Plot type changed to {plot_type}. Please select appropriate variables for this plot type.")
+    
+    @reactive.effect
+    async def announce_histogram_changes():
+        distribution_type = input.distribution_type()
+        hist_color = input.hist_color()
+        if distribution_type and hist_color:
+            await announce_to_screen_reader(f"Histogram settings updated: {distribution_type} distribution with {hist_color} colors")
+
+    @reactive.effect
+    async def announce_boxplot_changes():
+        boxplot_type = input.boxplot_type()
+        boxplot_color = input.boxplot_color()
+        if boxplot_type and boxplot_color:
+            await announce_to_screen_reader(f"Box plot settings updated: {boxplot_type} with {boxplot_color} colors")
+
+    @reactive.effect
+    async def announce_scatter_changes():
+        scatterplot_type = input.scatterplot_type()
+        scatter_color = input.scatter_color()
+        if scatterplot_type and scatter_color:
+            await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
+
     # Histogram Plot
     @output
     @render_maidr
-    def create_histogram_output():
+    async def create_histogram_output():
         # Explicitly reference all relevant inputs for reactivity
         distribution_type = input.distribution_type()
         hist_color = input.hist_color()
         theme = input.theme()
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating {distribution_type.lower()} histogram with {hist_color.lower()} color scheme")
+        
         result = create_histogram(distribution_type, hist_color, theme)
-        # Store the maidr object for HTML saving
-        if hasattr(result, '_maidr_obj'):
-            current_maidr.set(result._maidr_obj)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+            
+        # Announce plot completion
+        await announce_to_screen_reader(f"Histogram plot completed. Showing {distribution_type.lower()} distribution. Plot is now accessible for exploration.")
         return result
 
     # Box Plot
     @output
     @render_maidr
-    def create_boxplot_output():
+    async def create_boxplot_output():
         boxplot_type = input.boxplot_type()
         boxplot_color = input.boxplot_color()
         theme = input.theme()
-        return create_boxplot(boxplot_type, boxplot_color, theme)
+        
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating {boxplot_type.lower()} box plot with {boxplot_color.lower()} color scheme")
+        
+        result = create_boxplot(boxplot_type, boxplot_color, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+        
+        # Announce plot completion
+        await announce_to_screen_reader(f"Box plot completed. Showing {boxplot_type.lower()}. Plot is now accessible for exploration.")
+        
+        return result
 
     # Scatter Plot
     @output
     @render_maidr
-    def create_scatterplot_output():
+    async def create_scatterplot_output():
         scatterplot_type = input.scatterplot_type()
         scatter_color = input.scatter_color()
         theme = input.theme()
-        return create_scatterplot(scatterplot_type, scatter_color, theme)
+        
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating scatter plot showing {scatterplot_type.lower()} with {scatter_color.lower()} color scheme")
+        
+        result = create_scatterplot(scatterplot_type, scatter_color, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+        
+        # Announce plot completion
+        await announce_to_screen_reader(f"Scatter plot completed. Showing {scatterplot_type.lower()}. Plot is now accessible for exploration.")
+        
+        return result
 
     # Bar Plot
     @output
     @render_maidr
-    def create_barplot_output():
+    async def create_barplot_output():
         barplot_color = input.barplot_color()
         theme = input.theme()
-        return create_barplot(barplot_color, theme)
+        
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating bar plot with {barplot_color.lower()} color scheme")
+        
+        result = create_barplot(barplot_color, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+        
+        # Announce plot completion
+        await announce_to_screen_reader("Bar plot completed. Plot is now accessible for exploration.")
+        
+        return result
 
     # Line Plot
     @output
     @render_maidr
-    def create_lineplot_output():
+    async def create_lineplot_output():
         lineplot_type = input.lineplot_type()
         lineplot_color = input.lineplot_color()
         theme = input.theme()
-        return create_lineplot(lineplot_type, lineplot_color, theme)
+        
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating line plot showing {lineplot_type.lower()} with {lineplot_color.lower()} color scheme")
+        
+        result = create_lineplot(lineplot_type, lineplot_color, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+        
+        # Announce plot completion
+        await announce_to_screen_reader(f"Line plot completed. Showing {lineplot_type.lower()}. Plot is now accessible for exploration.")
+        
+        return result
 
     # Heatmap
     @output
     @render_maidr
-    def create_heatmap_output():
+    async def create_heatmap_output():
         heatmap_type = input.heatmap_type()
         theme = input.theme()
-        return create_heatmap(heatmap_type, theme)
+        
+        # Announce plot generation
+        await announce_to_screen_reader(f"Generating {heatmap_type.lower()} heatmap")
+        
+        result = create_heatmap(heatmap_type, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+        
+        # Announce plot completion
+        await announce_to_screen_reader(f"Heatmap completed. Showing {heatmap_type.lower()} pattern. Plot is now accessible for exploration.")
+        
+        return result
 
     # Multiline Plot
     # First, create a reactive calculation for the multiline data
@@ -386,7 +673,13 @@ def server(input, output, session):
         theme = input.theme()
         # Get the data using the reactive calculation
         data = get_multiline_data()
-        return create_multiline_plot(data, multiline_type, multiline_color, theme)
+        result = create_multiline_plot(data, multiline_type, multiline_color, theme)
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+            
+        return result
 
     # Multilayer Plot
     @output
@@ -396,19 +689,51 @@ def server(input, output, session):
         multilayer_background_color = input.multilayer_background_color()
         multilayer_line_color = input.multilayer_line_color()
         theme = input.theme()
-        return create_multilayer_plot(
+        result = create_multilayer_plot(
             multilayer_background_type, 
             multilayer_background_color, 
             multilayer_line_color, 
             theme
         )
+        
+        # Store the current figure for HTML saving using plt.gcf()
+        if result is not None:
+            current_figure.set(plt.gcf())
+            
+        return result
 
     # Multipanel Plot
     @output
     @render_maidr
     def create_multipanel_plot_output():
         theme = input.theme()
-        return create_multipanel_plot("Column", "Default", theme)
+        
+        # Clear any existing figures first
+        plt.clf()
+        
+        result = create_multipanel_plot("Column", "Default", theme)
+        
+        # Store the current figure for HTML saving - try multiple approaches
+        if result is not None:
+            try:
+                # First try to get figure from the axes object
+                fig = result.get_figure()
+                current_figure.set(fig)
+                print(f"Multipanel: Successfully captured figure with {len(fig.axes)} axes")
+            except Exception as e:
+                print(f"Multipanel: Error getting figure from axes: {e}")
+                try:
+                    # Fallback to plt.gcf()
+                    fig = plt.gcf()
+                    if fig and fig.axes:
+                        current_figure.set(fig)
+                        print(f"Multipanel: Fallback captured figure with {len(fig.axes)} axes")
+                    else:
+                        print("Multipanel: No valid figure found")
+                except Exception as e2:
+                    print(f"Multipanel: Fallback also failed: {e2}")
+            
+        return result
 
     # Candlestick Chart
     @output
@@ -424,6 +749,10 @@ def server(input, output, session):
             
             if ax is None:
                 return None
+                
+            # Store the current figure for HTML saving using plt.gcf()
+            current_figure.set(plt.gcf())
+            
             # For MAIDR rendering, return the axes object directly
             return ax
             
@@ -433,13 +762,21 @@ def server(input, output, session):
     # Practice Tab Logic
     @reactive.Effect
     @reactive.event(input.file_upload)
-    def update_variable_choices():
+    async def update_variable_choices():
         file: list[FileInfo] = input.file_upload()
         if file and len(file) > 0:
+            # Announce file upload start
+            await announce_to_screen_reader("Processing uploaded CSV file...")
+            
             df = pd.read_csv(file[0]["datapath"])
             uploaded_data.set(df)
             numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
             categorical_vars = df.select_dtypes(include="object").columns.tolist()
+            
+            # Announce successful file processing
+            total_vars = len(df.columns)
+            rows_count = len(df)
+            await announce_to_screen_reader(f"File uploaded successfully. Dataset contains {rows_count} rows and {total_vars} variables: {len(numeric_vars)} numeric and {len(categorical_vars)} categorical variables.")
 
             # Update dropdown choices for plots in Practice tab
             ui.update_select(
@@ -804,55 +1141,83 @@ def server(input, output, session):
 
     @output
     @render_maidr
-    def create_custom_plot():
+    async def create_custom_plot():
         df = uploaded_data.get()
         plot_type = input.plot_type()
+        
+        if df is None or not plot_type:
+            return None
+            
         color = color_palettes[input.plot_color()]
         theme = input.theme()
 
-        if df is None or not plot_type:
-            return None
+        # Announce plot generation start
+        await announce_to_screen_reader(f"Generating custom {plot_type.lower()} using your uploaded data...")
 
         try:
             fig = plt.figure()
             if plot_type == "Histogram":
                 var = input.var_histogram()
+                if not var:
+                    await announce_to_screen_reader("Please select a variable for the histogram")
+                    return None
                 result = create_custom_histogram(df, var, color, theme)
                 # Store the figure for download
                 current_figure.set(plt.gcf())
+                await announce_to_screen_reader(f"Custom histogram completed using variable {var}. Plot is now accessible for exploration.")
                 return result
                 
             elif plot_type == "Box Plot":
                 var_x = input.var_boxplot_x()
                 var_y = input.var_boxplot_y()
+                if not var_x:
+                    await announce_to_screen_reader("Please select an X variable for the box plot")
+                    return None
                 result = create_custom_boxplot(df, var_x, var_y, color, theme)
                 current_figure.set(plt.gcf())
+                var_info = f" by {var_y}" if var_y else ""
+                await announce_to_screen_reader(f"Custom box plot completed using variable {var_x}{var_info}. Plot is now accessible for exploration.")
                 return result
                 
             elif plot_type == "Scatter Plot":
                 var_x = input.var_scatter_x()
                 var_y = input.var_scatter_y()
+                if not var_x or not var_y:
+                    await announce_to_screen_reader("Please select both X and Y variables for the scatter plot")
+                    return None
                 result = create_custom_scatterplot(df, var_x, var_y, color, theme)
                 current_figure.set(plt.gcf())
+                await announce_to_screen_reader(f"Custom scatter plot completed showing {var_x} versus {var_y}. Plot is now accessible for exploration.")
                 return result
                 
             elif plot_type == "Bar Plot":
                 var = input.var_bar_plot()
+                if not var:
+                    await announce_to_screen_reader("Please select a variable for the bar plot")
+                    return None
                 result = create_custom_barplot(df, var, color, theme)
                 current_figure.set(plt.gcf())
+                await announce_to_screen_reader(f"Custom bar plot completed using variable {var}. Plot is now accessible for exploration.")
                 return result
                 
             elif plot_type == "Line Plot":
                 var_x = input.var_line_x()
                 var_y = input.var_line_y()
+                if not var_x or not var_y:
+                    await announce_to_screen_reader("Please select both X and Y variables for the line plot")
+                    return None
                 result = create_custom_lineplot(df, var_x, var_y, color, theme)
                 current_figure.set(plt.gcf())
+                await announce_to_screen_reader(f"Custom line plot completed showing {var_x} versus {var_y}. Plot is now accessible for exploration.")
                 return result
                 
             elif plot_type == "Heatmap":
                 var_x = input.var_heatmap_x()
                 var_y = input.var_heatmap_y()
                 var_value = input.var_heatmap_value()
+                if not var_x or not var_y or not var_value:
+                    await announce_to_screen_reader("Please select X, Y, and value variables for the heatmap")
+                    return None
                 colorscale = input.heatmap_colorscale()
                 result = create_custom_heatmap(df, var_x, var_y, var_value, colorscale, theme)
                 current_figure.set(plt.gcf())
@@ -916,7 +1281,9 @@ def server(input, output, session):
                 result = create_custom_multipanel_plot(
                     df, vars_config, layout_type, color_palette, theme
                 )
-                current_figure.set(plt.gcf())
+                # For multipanel plots, get figure from the axes object
+                if result is not None:
+                    current_figure.set(result.get_figure())
                 return result
                 
             return None
@@ -927,13 +1294,17 @@ def server(input, output, session):
     # Handle saving SVG to Downloads folder
     @reactive.effect
     @reactive.event(input.save_svg_button)
-    def save_svg_to_downloads():
+    async def save_svg_to_downloads():
         # Get the current figure
         fig = current_figure.get()
         
         if fig is None:
+            await announce_to_screen_reader("No plot available to save")
             ui.notification_show("No plot available to save", type="warning")
             return
+        
+        # Announce save process start
+        await announce_to_screen_reader("Saving plot as SVG file to Downloads folder...")
         
         try:
             # Create a unique filename with timestamp
@@ -947,15 +1318,19 @@ def server(input, output, session):
             # Save the figure directly, avoid temporary figure creation
             fig.savefig(filepath, format='svg', bbox_inches='tight')
             
+            await announce_to_screen_reader(f"SVG file saved successfully as {filename} in Downloads folder")
             ui.notification_show(f"Plot saved to Downloads as {filename}", type="success")
         except Exception as e:
+            await announce_to_screen_reader(f"Error saving SVG file: {str(e)}")
             ui.notification_show(f"Error saving plot: {str(e)}", type="error")
             print(f"Error saving SVG: {str(e)}")
 
     # Handle saving HTML to Downloads folder
     @reactive.effect
     @reactive.event(input.save_html_button)
-    def save_html_to_downloads():
+    async def save_html_to_downloads():
+        # Announce save process start
+        await announce_to_screen_reader("Saving accessible plot as HTML file to Downloads folder...")
         try:
             # Create a unique filename with timestamp
             filename = f"accessible_plot_{uuid.uuid4().hex[:8]}.html"
@@ -969,20 +1344,71 @@ def server(input, output, session):
             if fig is None:
                 # Try to get the current plot from matplotlib
                 fig = plt.gcf()
-                if fig.get_axes():
+                if fig and fig.get_axes():
                     current_figure.set(fig)
+                    print(f"Save HTML: Using fallback figure with {len(fig.axes)} axes")
                 else:
+                    await announce_to_screen_reader("No plot available to save")
                     ui.notification_show("No plot available to save", type="warning")
+                    print("Save HTML: No valid figure found")
                     return
+            else:
+                print(f"Save HTML: Using stored figure with {len(fig.axes)} axes")
             
-            # Use maidr.save_html directly
-            maidr.save_html(fig, filepath)
+            # Save original environment encoding settings
+            original_encoding = os.environ.get('PYTHONIOENCODING', '')
             
+            try:
+                # Set UTF-8 encoding for Python I/O operations
+                os.environ['PYTHONIOENCODING'] = 'utf-8'
+                
+                # Try to set matplotlib to use UTF-8 compatible fonts
+                import matplotlib
+                matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'Segoe UI', 'Tahoma', 'sans-serif']
+                
+                # Use maidr.save_html with environment set for UTF-8
+                maidr.save_html(fig, filepath)
+                
+            except (UnicodeEncodeError, UnicodeDecodeError) as unicode_error:
+                print(f"Unicode error occurred: {unicode_error}")
+                # If there's a Unicode error, try alternative approach
+                try:
+                    # Save to a temporary file in a different location
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+                        temp_filepath = temp_file.name
+                    
+                    # Try saving to temp location first
+                    maidr.save_html(fig, temp_filepath)
+                    
+                    # If successful, copy to final location with proper encoding
+                    with open(temp_filepath, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read()
+                        
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    # Clean up temporary file
+                    os.remove(temp_filepath)
+                    
+                except Exception as fallback_error:
+                    print(f"Fallback method also failed: {fallback_error}")
+                    raise unicode_error  # Re-raise the original Unicode error
+                    
+            finally:
+                # Restore original encoding setting
+                if original_encoding:
+                    os.environ['PYTHONIOENCODING'] = original_encoding
+                elif 'PYTHONIOENCODING' in os.environ:
+                    del os.environ['PYTHONIOENCODING']
+            
+            await announce_to_screen_reader(f"Accessible HTML file saved successfully as {filename} in Downloads folder. This file includes screen reader compatible features.")
             ui.notification_show(f"Accessible plot saved to Downloads as {filename}", type="success")
+            
         except Exception as e:
+            await announce_to_screen_reader(f"Error saving HTML file: {str(e)}")
             ui.notification_show(f"Error saving HTML: {str(e)}", type="error")
             print(f"Error saving HTML: {str(e)}")
-
 
 # Create the app
 app = App(app_ui, server)
