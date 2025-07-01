@@ -212,14 +212,6 @@ app_ui = ui.page_fluid(
                     title="Open help menu - keyboard shortcut: press 'h'"
                 )
             ),
-            ui.nav_control(
-                ui.input_action_button(
-                    "save_html_button", 
-                    "Save HTML", 
-                    class_="btn btn-secondary",
-                    style="margin-left: 10px;"
-                )
-            ),
         ),
         # Fifth tab: Practice tab with file upload, data types, and custom plot creation
         ui.nav_panel(
