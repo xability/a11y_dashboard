@@ -1303,10 +1303,19 @@ def server(input, output, session):
             plot_type = input.plot_type() if input.plot_type() else "plot"
             filename = f"{plot_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.svg"
             
-            # Get the Downloads folder path
-            downloads_folder = str(Path.home() / "Downloads")
-            filepath = os.path.join(downloads_folder, filename)
-            
+            # Get the Downloads folder path - handle both local and deployed environments
+            try:
+                # Try user's Downloads folder first
+                downloads_folder = str(Path.home() / "Downloads")
+                if not os.path.exists(downloads_folder):
+                    # Fallback to current working directory
+                    downloads_folder = os.getcwd()
+                filepath = os.path.join(downloads_folder, filename)
+            except Exception:
+                # Final fallback to current directory
+                downloads_folder = os.getcwd()
+                filepath = os.path.join(downloads_folder, filename)
+
             # Save the figure directly, avoid temporary figure creation
             fig.savefig(filepath, format='svg', bbox_inches='tight')
             
@@ -1315,7 +1324,6 @@ def server(input, output, session):
         except Exception as e:
             await announce_to_screen_reader(f"Error saving SVG file: {str(e)}")
             ui.notification_show(f"Error saving plot: {str(e)}", type="error")
-            print(f"Error saving SVG: {str(e)}")
 
     # Handle saving HTML to Downloads folder
     @reactive.effect
@@ -1327,10 +1335,19 @@ def server(input, output, session):
             # Create a unique filename with timestamp
             filename = f"accessible_plot_{uuid.uuid4().hex[:8]}.html"
             
-            # Get the Downloads folder path
-            downloads_folder = str(Path.home() / "Downloads")
-            filepath = os.path.join(downloads_folder, filename)
-            
+            # Get the Downloads folder path - handle both local and deployed environments
+            try:
+                # Try user's Downloads folder first
+                downloads_folder = str(Path.home() / "Downloads")
+                if not os.path.exists(downloads_folder):
+                    # Fallback to current working directory
+                    downloads_folder = os.getcwd()
+                filepath = os.path.join(downloads_folder, filename)
+            except Exception:
+                # Final fallback to current directory
+                downloads_folder = os.getcwd()
+                filepath = os.path.join(downloads_folder, filename)
+
             # Get the current figure
             fig = current_figure.get()
             if fig is None:
@@ -1400,7 +1417,6 @@ def server(input, output, session):
         except Exception as e:
             await announce_to_screen_reader(f"Error saving HTML file: {str(e)}")
             ui.notification_show(f"Error saving HTML: {str(e)}", type="error")
-            print(f"Error saving HTML: {str(e)}")
 
 # Create the app
 app = App(app_ui, server)
