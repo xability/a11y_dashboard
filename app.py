@@ -196,20 +196,19 @@ app_ui = ui.page_fluid(
                 )
             ),
             ui.nav_control(
-                ui.input_action_button(
-                    "save_html_button", 
-                    "Save HTML", 
-                    class_="btn btn-secondary",
-                    style="margin-left: 10px;"
-                )
-            ),
-            ui.nav_control(
-                ui.input_action_button(
-                    "help_button", 
-                    "📚 Help (h)", 
-                    class_="btn btn-info",
-                    style="margin-left: 10px;",
-                    title="Open help menu - keyboard shortcut: press 'h'"
+                ui.div(
+                    ui.download_button(
+                        "download_html",
+                        "Download HTML",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "help_button",
+                        "📚 Help (h)",
+                        class_="btn btn-info",
+                        title="Open help menu - keyboard shortcut: press 'h'"
+                    ),
+                    style="display: flex; gap: 10px; margin-top: 10px;"
                 )
             ),
         ),
@@ -455,6 +454,9 @@ def server(input, output, session):
     current_figure = reactive.Value(None)
     # Add reactive value to store the current maidr object
     current_maidr = reactive.Value(None)
+    
+    # Reactive value to store the last saved file path
+    last_saved_file = reactive.Value(None)
 
     # Helper function to announce messages to screen readers
     async def announce_to_screen_reader(message):
@@ -1368,55 +1370,49 @@ def server(input, output, session):
             original_encoding = os.environ.get('PYTHONIOENCODING', '')
             
             try:
-                # Set UTF-8 encoding for Python I/O operations
-                os.environ['PYTHONIOENCODING'] = 'utf-8'
-                
-                # Try to set matplotlib to use UTF-8 compatible fonts
-                import matplotlib
-                matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'Segoe UI', 'Tahoma', 'sans-serif']
-                
-                # Use maidr.save_html with environment set for UTF-8
+                # Use maidr.save_html to save the plot
                 maidr.save_html(fig, filepath)
                 
-            except (UnicodeEncodeError, UnicodeDecodeError) as unicode_error:
-                print(f"Unicode error occurred: {unicode_error}")
-                # If there's a Unicode error, try alternative approach
-                try:
-                    # Save to a temporary file in a different location
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
-                        temp_filepath = temp_file.name
-                    
-                    # Try saving to temp location first
-                    maidr.save_html(fig, temp_filepath)
-                    
-                    # If successful, copy to final location with proper encoding
-                    with open(temp_filepath, 'r', encoding='utf-8', errors='replace') as f:
-                        content = f.read()
-                        
-                    with open(filepath, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    
-                    # Clean up temporary file
-                    os.remove(temp_filepath)
-                    
-                except Exception as fallback_error:
-                    print(f"Fallback method also failed: {fallback_error}")
-                    raise unicode_error  # Re-raise the original Unicode error
-                    
-            finally:
-                # Restore original encoding setting
-                if original_encoding:
-                    os.environ['PYTHONIOENCODING'] = original_encoding
-                elif 'PYTHONIOENCODING' in os.environ:
-                    del os.environ['PYTHONIOENCODING']
+                # Store the file path for download
+                last_saved_file.set(filepath)
+                
+            except Exception as e:
+                raise e
             
-            await announce_to_screen_reader(f"Accessible HTML file saved successfully as {filename} in Downloads folder. This file includes screen reader compatible features.")
-            ui.notification_show(f"Accessible plot saved to Downloads as {filename}", type="success")
+            await announce_to_screen_reader(f"Accessible HTML file saved successfully as {filename}. Click 'Download HTML' to download it.")
+            ui.notification_show(f"Accessible plot saved as {filename}. Click 'Download HTML' to download.", type="success")
             
         except Exception as e:
             await announce_to_screen_reader(f"Error saving HTML file: {str(e)}")
             ui.notification_show(f"Error saving HTML: {str(e)}", type="error")
+
+    # Handle downloading HTML file
+    @output
+    @render.download(filename=lambda: f"accessible_plot_{uuid.uuid4().hex[:8]}.html")
+    def download_html():
+        filepath = last_saved_file.get()
+        if filepath and os.path.exists(filepath):
+            return filepath
+        else:
+            # If no saved file, create one on the fly
+            fig = current_figure.get()
+            if fig is None:
+                fig = plt.gcf()
+            
+            if fig and fig.get_axes():
+                # Create temporary file
+                import tempfile
+                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
+                temp_filepath = temp_file.name
+                temp_file.close()
+                
+                try:
+                    maidr.save_html(fig, temp_filepath)
+                    return temp_filepath
+                except Exception as e:
+                    raise Exception(f"Error creating download file: {str(e)}")
+            else:
+                raise Exception("No plot available to download")
 
 # Create the app
 app = App(app_ui, server)
