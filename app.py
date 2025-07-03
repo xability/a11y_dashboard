@@ -620,7 +620,7 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.embed_code_button)
     async def embed_code_button_clicked():
-        """Generate embed code with full HTML content"""
+        """Generate embed code with full HTML content that preserves MAIDR functionality"""
         try:
             # Get the current figure
             fig = current_figure.get()
@@ -631,31 +631,31 @@ def server(input, output, session):
                 await announce_to_screen_reader("No plot available to generate embed code")
                 return
             
-            # Generate HTML content using the same logic as download
+            # Generate HTML content using the same logic as download - this works!
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
             temp_filepath = temp_file.name
             temp_file.close()
             
             try:
-                # Save the HTML content with proper UTF-8 encoding
+                # Use the same save_html_utf8 function that works for downloads
+                print(f"Saving MAIDR HTML using save_html_utf8 function")
                 save_html_utf8(fig, temp_filepath)
                 
                 # Read the HTML content with explicit UTF-8 encoding
                 with open(temp_filepath, 'r', encoding='utf-8', errors='replace') as f:
                     html_content = f.read()
                 
-                # Clean up HTML content for embedding
-                html_content = html_content.strip()
+                print(f"Generated HTML content length: {len(html_content)}")
                 
-                # Properly escape HTML content for srcdoc attribute
-                escaped_content = html_content.replace('\\', '\\\\').replace('"', '&quot;').replace("'", '&#39;').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()
+                # Extract only the inner content (div with link, script, and SVG) for embedding
+                # This excludes DOCTYPE, html, head, and body tags
+                embed_code = extract_embed_content(html_content)
                 
-                # Create the iframe embed code with full HTML content
-                iframe_code = f'<iframe srcdoc="{escaped_content}" style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 4px;" title="Accessible Plot Visualization" aria-label="Interactive accessible data visualization with MAIDR support"></iframe>'
+                print(f"Generated embed code length: {len(embed_code)}")
                 
-                # Send the iframe code to client side
-                await session.send_custom_message("show_embed_modal", iframe_code)
-                await announce_to_screen_reader("Embed code modal opened with iframe code ready to copy")
+                # Send the full HTML code to client side
+                await session.send_custom_message("show_embed_modal", embed_code)
+                await announce_to_screen_reader("Embed code modal opened with div block ready to copy. Contains CSS link, JavaScript, and SVG for full MAIDR accessibility.")
                 
             finally:
                 # Clean up temp file
@@ -683,21 +683,25 @@ def server(input, output, session):
             embed_code_content.set(embed_code)
             modal = ui.modal(
                 ui.h3("Embed Code"),
-                ui.p("Copy the iframe code below to embed this accessible plot in your website:"),
+                ui.div(
+                    ui.p("Simply copy and paste this div block into any HTML page where you want the accessible plot to appear."),
+                    style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"
+                ),
+                ui.p("Div block embed code (preserves full MAIDR accessibility):"),
                 ui.input_text_area(
                     "embed_code_display",
                     "",
                     value=embed_code,
-                    rows=10,
+                    rows=15,
                     width="100%"
                 ),
-                ui.p("Select all the text above and copy it (Ctrl+C) to use in your website."),
+                ui.p("Copy all the div content above (Ctrl+A, then Ctrl+C) and paste it directly into the body of any HTML page where you want the accessible plot."),
                 footer=ui.modal_button("Close"),
                 size="l",
                 easy_close=True
             )
             ui.modal_show(modal)
-            await announce_to_screen_reader("Embed code modal opened. The complete iframe code is displayed. Select all text and copy it.")
+            await announce_to_screen_reader("Embed code modal opened with div block that preserves all MAIDR accessibility features. Ready to copy and paste.")
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -1165,6 +1169,28 @@ def server(input, output, session):
         scatter_color = input.scatter_color()
         if scatterplot_type and scatter_color:
             await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
+
+# Function to extract embed content from full HTML
+def extract_embed_content(html_content):
+    """Extract only the inner div content for embedding (excludes DOCTYPE, html, head, body tags)"""
+    import re
+    
+    # Find the content between <body> and </body>
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.DOTALL | re.IGNORECASE)
+    
+    if body_match:
+        body_content = body_match.group(1).strip()
+        return body_content
+    else:
+        # Fallback: try to find the main div with MAIDR content
+        # Look for the div that contains the link and script
+        div_match = re.search(r'(<div[^>]*>.*?<link.*?maidr.*?<script.*?</script>.*?<div.*?</div>\s*</div>)', html_content, re.DOTALL | re.IGNORECASE)
+        
+        if div_match:
+            return div_match.group(1).strip()
+        else:
+            # If we can't parse it properly, return a message
+            return "<!-- Error: Could not extract embed content from generated HTML -->"
 
 # Create the Shiny app
 app = App(app_ui, server)
