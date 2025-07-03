@@ -4,8 +4,7 @@ import pandas as pd
 import seaborn as sns
 import uuid
 import os
-import base64
-import io
+import tempfile
 from pathlib import Path
 from matplotlib.backends.backend_svg import FigureCanvasSVG
 from maidr.widget.shiny import render_maidr
@@ -17,6 +16,90 @@ from shiny.types import FileInfo
 from plots.utils import color_palettes
 from plots.histogram import create_histogram, create_custom_histogram
 from plots.boxplot import create_boxplot, create_custom_boxplot
+
+# Function to save HTML with UTF-8 encoding to avoid Windows encoding issues
+def save_html_utf8(fig, filepath):
+    """Save matplotlib figure as HTML with proper UTF-8 encoding"""
+    import io
+    import sys
+    import codecs
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    # Capture stdout/stderr during maidr.save_html to avoid encoding issues
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    
+    try:
+        # Create temporary UTF-8 buffers
+        stdout_buffer = io.StringIO()
+        stderr_buffer = io.StringIO()
+        
+        # Redirect to UTF-8 buffers during maidr.save_html
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            # Create temp file with UTF-8 encoding using codecs
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            try:
+                # Try to save directly first - maidr might handle encoding properly
+                try:
+                    maidr.save_html(fig, temp_path)
+                    
+                    # Verify the file was created and has content
+                    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                        # Read with codecs to ensure proper UTF-8 handling
+                        with codecs.open(temp_path, 'r', encoding='utf-8', errors='replace') as temp_f:
+                            content = temp_f.read()
+                        
+                        # Write to final destination with codecs for explicit UTF-8
+                        with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
+                            final_f.write(content)
+                    else:
+                        raise Exception("MAIDR save_html produced no output or empty file")
+                        
+                except Exception as maidr_error:
+                    # If direct save fails, try with a different approach
+                    print(f"Direct maidr.save_html failed: {maidr_error}")
+                    
+                    # Create a new temp path for retry
+                    temp_path_retry = temp_path + "_retry"
+                    
+                    # Try saving to a path with explicit UTF-8 handling
+                    # This approach avoids monkey-patching by controlling our temp file creation
+                    with codecs.open(temp_path_retry, 'w', encoding='utf-8') as temp_f:
+                        # Close the file so maidr can write to it
+                        pass
+                    
+                    # Now let maidr write to the file
+                    maidr.save_html(fig, temp_path_retry)
+                    
+                    # Read and copy with explicit UTF-8 handling
+                    with codecs.open(temp_path_retry, 'r', encoding='utf-8', errors='replace') as temp_f:
+                        content = temp_f.read()
+                    
+                    with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
+                        final_f.write(content)
+                    
+                    # Clean up retry temp file
+                    try:
+                        os.unlink(temp_path_retry)
+                    except:
+                        pass
+                    
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                    
+    finally:
+        # Restore original stdout/stderr
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
 from plots.scatterplot import create_scatterplot, create_custom_scatterplot
 from plots.barplot import create_barplot, create_custom_barplot
 from plots.lineplot import create_lineplot, create_custom_lineplot
@@ -58,6 +141,53 @@ app_ui = ui.page_fluid(
                 height: 1px;
                 overflow: hidden;
             }
+            .embed-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                display: none;
+            }
+            .embed-modal-content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                max-width: 80%;
+                max-height: 80%;
+                width: 600px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .embed-modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                border-bottom: 1px solid #dee2e6;
+                padding-bottom: 10px;
+            }
+            .embed-modal-body textarea {
+                width: 100%;
+                height: 300px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                border: 1px solid #ccc;
+                padding: 10px;
+                resize: vertical;
+            }
+            .embed-modal-footer {
+                margin-top: 15px;
+                text-align: right;
+            }
+            .embed-modal-footer button {
+                margin-left: 10px;
+            }
         """
         ),
         ui.tags.script(
@@ -78,6 +208,12 @@ app_ui = ui.page_fluid(
             Shiny.addCustomMessageHandler("show_help", function(message) {
                 // Trigger the help modal
                 Shiny.setInputValue("show_help_modal", Math.random());
+            });
+            
+            Shiny.addCustomMessageHandler("show_embed_modal", function(embedCode) {
+                // Trigger showing the embed modal in Shiny
+                Shiny.setInputValue("embed_code_content", embedCode);
+                Shiny.setInputValue("show_embed_modal_trigger", Math.random());
             });
             
             function announceToScreenReader(message) {
@@ -201,6 +337,12 @@ app_ui = ui.page_fluid(
                         "download_html",
                         "Download HTML",
                         class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        title="Get embed code for your website"
                     ),
                     ui.input_action_button(
                         "help_button",
@@ -489,246 +631,346 @@ def server(input, output, session):
         ui.modal_show(modal)
         await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
 
+    # Handle embed code button click
+    @reactive.effect
+    @reactive.event(input.embed_code_button)
+    async def embed_code_button_clicked():
+        """Generate embed code with full HTML content that preserves MAIDR functionality"""
+        try:
+            # Get the current figure
+            fig = current_figure.get()
+            if fig is None:
+                fig = plt.gcf()
+            
+            if not fig or not fig.get_axes():
+                await announce_to_screen_reader("No plot available to generate embed code")
+                return
+            
+            # Generate HTML content using the same logic as download - this works!
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
+            temp_filepath = temp_file.name
+            temp_file.close()
+            
+            try:
+                # Use the same save_html_utf8 function that works for downloads
+                print(f"Saving MAIDR HTML using save_html_utf8 function")
+                save_html_utf8(fig, temp_filepath)
+                
+                # Read the HTML content with explicit UTF-8 encoding
+                with open(temp_filepath, 'r', encoding='utf-8', errors='replace') as f:
+                    html_content = f.read()
+                
+                print(f"Generated HTML content length: {len(html_content)}")
+                
+                # Extract only the inner content (div with link, script, and SVG) for embedding
+                # This excludes DOCTYPE, html, head, and body tags
+                embed_code = extract_embed_content(html_content)
+                
+                print(f"Generated embed code length: {len(embed_code)}")
+                
+                # Send the full HTML code to client side
+                await session.send_custom_message("show_embed_modal", embed_code)
+                await announce_to_screen_reader("Embed code modal opened with secure iframe ready to copy. Contains sandboxed content with full MAIDR accessibility.")
+                
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_filepath)
+                except:
+                    pass
+                    
+        except Exception as e:
+            await announce_to_screen_reader(f"Error generating embed code: {str(e)}")
+            print(f"Embed code generation error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Store embed code content
+    embed_code_content = reactive.Value("")
+
+    # Handle showing embed modal
+    @reactive.effect
+    @reactive.event(input.show_embed_modal_trigger)
+    async def show_embed_modal():
+        """Show embed code modal"""
+        embed_code = getattr(input, 'embed_code_content', lambda: "")()
+        if embed_code:
+            embed_code_content.set(embed_code)
+            modal = ui.modal(
+                ui.h3("Embed Code"),
+                ui.div(
+                    ui.p("This iframe embed code contains all MAIDR accessibility features with sandbox security."),
+                    ui.p("Simply copy and paste this iframe code into any HTML page where you want the accessible plot to appear."),
+                    style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"
+                ),
+                ui.p("Iframe embed code (sandboxed and secure):"),
+                ui.input_text_area(
+                    "embed_code_display",
+                    "",
+                    value=embed_code,
+                    rows=15,
+                    width="100%"
+                ),
+                ui.p("Copy the iframe code above (Ctrl+A, then Ctrl+C) and paste it directly into any HTML page where you want the accessible plot."),
+                footer=ui.modal_button("Close"),
+                size="l",
+                easy_close=True
+            )
+            ui.modal_show(modal)
+            await announce_to_screen_reader("Embed code modal opened with secure iframe that preserves all MAIDR accessibility features. Ready to copy and paste.")
+
     # Update the theme based on the selected option
     @reactive.effect
     @reactive.event(input.theme)
     async def update_theme():
         await session.send_custom_message("update_theme", input.theme())
 
-    # Add reactive effects to announce changes to screen readers
-    @reactive.effect
-    async def announce_plot_type_change():
-        if uploaded_data.get() is not None and input.plot_type():
-            plot_type = input.plot_type()
-            await announce_to_screen_reader(f"Plot type changed to {plot_type}. Please select appropriate variables for this plot type.")
+    # Add download HTML functionality
+    @output
+    @render.download(filename=lambda: f"accessible_plot_{uuid.uuid4().hex[:8]}.html")
+    def download_html():
+        """Download the current plot as HTML file"""
+        try:
+            # Get the current figure
+            fig = current_figure.get()
+            if fig is None:
+                fig = plt.gcf()
+            
+            if not fig or not fig.get_axes():
+                raise Exception("No plot available to download")
+            
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
+            temp_filepath = temp_file.name
+            temp_file.close()
+            
+            try:
+                # Save the HTML content with proper UTF-8 encoding
+                save_html_utf8(fig, temp_filepath)
+                return temp_filepath
+            except Exception as e:
+                # Clean up temp file on error
+                try:
+                    os.unlink(temp_filepath)
+                except:
+                    pass
+                raise Exception(f"Error creating HTML file: {str(e)}")
+                
+        except Exception as e:
+            print(f"Download HTML error: {e}")
+            raise Exception(f"Error downloading HTML: {str(e)}")
+
+    # Add remaining reactive effects and output functions here
     
-    @reactive.effect
-    async def announce_histogram_changes():
-        distribution_type = input.distribution_type()
-        hist_color = input.hist_color()
-        if distribution_type and hist_color:
-            await announce_to_screen_reader(f"Histogram settings updated: {distribution_type} distribution with {hist_color} colors")
-
-    @reactive.effect
-    async def announce_boxplot_changes():
-        boxplot_type = input.boxplot_type()
-        boxplot_color = input.boxplot_color()
-        if boxplot_type and boxplot_color:
-            await announce_to_screen_reader(f"Box plot settings updated: {boxplot_type} with {boxplot_color} colors")
-
-    @reactive.effect
-    async def announce_scatter_changes():
-        scatterplot_type = input.scatterplot_type()
-        scatter_color = input.scatter_color()
-        if scatterplot_type and scatter_color:
-            await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
-
-    # Histogram Plot
+    # Histogram plot rendering
     @output
     @render_maidr
     async def create_histogram_output():
-        # Explicitly reference all relevant inputs for reactivity
-        distribution_type = input.distribution_type()
-        hist_color = input.hist_color()
-        theme = input.theme()
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating {distribution_type.lower()} histogram with {hist_color.lower()} color scheme")
-        
-        result = create_histogram(distribution_type, hist_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
+        """Create and render histogram plot"""
+        try:
+            # Explicitly reference all relevant inputs for reactivity
+            distribution_type = input.distribution_type()
+            hist_color = input.hist_color()
+            theme = input.theme()
             
-        # Announce plot completion
-        await announce_to_screen_reader(f"Histogram plot completed. Showing {distribution_type.lower()} distribution. Plot is now accessible for exploration.")
-        return result
-
-    # Box Plot
-    @output
-    @render_maidr
-    async def create_boxplot_output():
-        boxplot_type = input.boxplot_type()
-        boxplot_color = input.boxplot_color()
-        theme = input.theme()
-        
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating {boxplot_type.lower()} box plot with {boxplot_color.lower()} color scheme")
-        
-        result = create_boxplot(boxplot_type, boxplot_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-        
-        # Announce plot completion
-        await announce_to_screen_reader(f"Box plot completed. Showing {boxplot_type.lower()}. Plot is now accessible for exploration.")
-        
-        return result
-
-    # Scatter Plot
-    @output
-    @render_maidr
-    async def create_scatterplot_output():
-        scatterplot_type = input.scatterplot_type()
-        scatter_color = input.scatter_color()
-        theme = input.theme()
-        
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating scatter plot showing {scatterplot_type.lower()} with {scatter_color.lower()} color scheme")
-        
-        result = create_scatterplot(scatterplot_type, scatter_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-        
-        # Announce plot completion
-        await announce_to_screen_reader(f"Scatter plot completed. Showing {scatterplot_type.lower()}. Plot is now accessible for exploration.")
-        
-        return result
-
-    # Bar Plot
-    @output
-    @render_maidr
-    async def create_barplot_output():
-        barplot_color = input.barplot_color()
-        theme = input.theme()
-        
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating bar plot with {barplot_color.lower()} color scheme")
-        
-        result = create_barplot(barplot_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-        
-        # Announce plot completion
-        await announce_to_screen_reader("Bar plot completed. Plot is now accessible for exploration.")
-        
-        return result
-
-    # Line Plot
-    @output
-    @render_maidr
-    async def create_lineplot_output():
-        lineplot_type = input.lineplot_type()
-        lineplot_color = input.lineplot_color()
-        theme = input.theme()
-        
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating line plot showing {lineplot_type.lower()} with {lineplot_color.lower()} color scheme")
-        
-        result = create_lineplot(lineplot_type, lineplot_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-        
-        # Announce plot completion
-        await announce_to_screen_reader(f"Line plot completed. Showing {lineplot_type.lower()}. Plot is now accessible for exploration.")
-        
-        return result
-
-    # Heatmap
-    @output
-    @render_maidr
-    async def create_heatmap_output():
-        heatmap_type = input.heatmap_type()
-        theme = input.theme()
-        
-        # Announce plot generation
-        await announce_to_screen_reader(f"Generating {heatmap_type.lower()} heatmap")
-        
-        result = create_heatmap(heatmap_type, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-        
-        # Announce plot completion
-        await announce_to_screen_reader(f"Heatmap completed. Showing {heatmap_type.lower()} pattern. Plot is now accessible for exploration.")
-        
-        return result
-
-    # Multiline Plot
-    # First, create a reactive calculation for the multiline data
-    @reactive.Calc
-    def get_multiline_data():
-        return generate_multiline_data(input.multiline_type())
+            # Announce plot generation
+            await announce_to_screen_reader(f"Generating {distribution_type.lower()} histogram with {hist_color.lower()} color scheme")
+            
+            ax = create_histogram(distribution_type, hist_color, theme)
+            print(f"create_histogram returned: {type(ax)}, value: {ax}")
+            
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_histogram returned a list instead of axes object: {type(ax)}, length: {len(ax)}")
+                    return None
+                
+                # Check if it has the figure attribute
+                if not hasattr(ax, 'figure'):
+                    print(f"ERROR: create_histogram returned object without figure attribute: {type(ax)}")
+                    return None
+                    
+                fig = ax.figure
+                current_figure.set(fig)
+                print(f"Returning to MAIDR: {type(ax)}, axes object: {ax}")
+                # Return the axes object, not the figure - MAIDR expects the axes
+                return ax
+        except Exception as e:
+            print(f"Error creating histogram: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
+    # Box plot rendering
+    @output
+    @render_maidr
+    def create_boxplot_output():
+        """Create and render box plot"""
+        try:
+            ax = create_boxplot(input.boxplot_type(), input.boxplot_color(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_boxplot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating boxplot: {e}")
+            return None
+    
+    # Scatter plot rendering
+    @output
+    @render_maidr
+    def create_scatterplot_output():
+        """Create and render scatter plot"""
+        try:
+            ax = create_scatterplot(input.scatterplot_type(), input.scatter_color(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_scatterplot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating scatterplot: {e}")
+            return None
+    
+    # Bar plot rendering
+    @output
+    @render_maidr
+    def create_barplot_output():
+        """Create and render bar plot"""
+        try:
+            ax = create_barplot(input.barplot_color(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_barplot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating barplot: {e}")
+            return None
+    
+    # Line plot rendering
+    @output
+    @render_maidr
+    def create_lineplot_output():
+        """Create and render line plot"""
+        try:
+            ax = create_lineplot(input.lineplot_type(), input.lineplot_color(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_lineplot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating lineplot: {e}")
+            return None
+    
+    # Heatmap rendering
+    @output
+    @render_maidr
+    def create_heatmap_output():
+        """Create and render heatmap"""
+        try:
+            ax = create_heatmap(input.heatmap_type(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_heatmap returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating heatmap: {e}")
+            return None
+    
+    # Multiline plot rendering
     @output
     @render_maidr
     def create_multiline_plot_output():
-        # Explicitly reference all relevant inputs for reactivity
-        multiline_type = input.multiline_type()
-        multiline_color = input.multiline_color()
-        theme = input.theme()
-        # Get the data using the reactive calculation
-        data = get_multiline_data()
-        result = create_multiline_plot(data, multiline_type, multiline_color, theme)
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
+        """Create and render multiline plot"""
+        try:
+            data = generate_multiline_data(input.multiline_type())
+            multiline_data.set(data)
             
-        return result
-
-    # Multilayer Plot
+            ax = create_multiline_plot(data, input.multiline_type(), input.multiline_color(), input.theme())
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_multiline_plot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating multiline plot: {e}")
+            return None
+    
+    # Multilayer plot rendering
     @output
     @render_maidr
     def create_multilayer_plot_output():
-        multilayer_background_type = input.multilayer_background_type()
-        multilayer_background_color = input.multilayer_background_color()
-        multilayer_line_color = input.multilayer_line_color()
-        theme = input.theme()
-        result = create_multilayer_plot(
-            multilayer_background_type, 
-            multilayer_background_color, 
-            multilayer_line_color, 
-            theme
-        )
-        
-        # Store the current figure for HTML saving using plt.gcf()
-        if result is not None:
-            current_figure.set(plt.gcf())
-            
-        return result
-
-    # Multipanel Plot
+        """Create and render multilayer plot"""
+        try:
+            ax = create_multilayer_plot(
+                input.multilayer_background_type(), 
+                input.multilayer_background_color(), 
+                input.multilayer_line_color(), 
+                input.theme()
+            )
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_multilayer_plot returned a list instead of axes object: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating multilayer plot: {e}")
+            return None
+    
+    # Multipanel plot rendering
     @output
     @render_maidr
     def create_multipanel_plot_output():
-        theme = input.theme()
-        
-        # Clear any existing figures first
-        plt.clf()
-        
-        result = create_multipanel_plot("Column", "Default", theme)
-        
-        # Store the current figure for HTML saving - try multiple approaches
-        if result is not None:
-            try:
-                # First try to get figure from the axes object
-                fig = result.get_figure()
-                current_figure.set(fig)
-                print(f"Multipanel: Successfully captured figure with {len(fig.axes)} axes")
-            except Exception as e:
-                print(f"Multipanel: Error getting figure from axes: {e}")
-                try:
-                    # Fallback to plt.gcf()
-                    fig = plt.gcf()
-                    if fig and fig.axes:
-                        current_figure.set(fig)
-                        print(f"Multipanel: Fallback captured figure with {len(fig.axes)} axes")
-                    else:
-                        print("Multipanel: No valid figure found")
-                except Exception as e2:
-                    print(f"Multipanel: Fallback also failed: {e2}")
+        """Create and render multipanel plot"""
+        try:
+            ax = create_multipanel_plot("default", "default", input.theme())
+            print(f"create_multipanel_plot returned: {type(ax)}, value: {ax}")
             
-        return result
-
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: create_multipanel_plot returned a list instead of axes object: {type(ax)}, length: {len(ax)}")
+                    return None
+                
+                # Check if it has the figure attribute
+                if not hasattr(ax, 'figure'):
+                    print(f"ERROR: create_multipanel_plot returned object without figure attribute: {type(ax)}")
+                    return None
+                    
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except Exception as e:
+            print(f"Error creating multipanel plot: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     # Candlestick Chart
     @output
     @render_maidr 
@@ -753,670 +995,246 @@ def server(input, output, session):
         except Exception as e:
             return None
 
-    # Practice Tab Logic
-    @reactive.Effect
+    # File upload handling
+    @reactive.effect
     @reactive.event(input.file_upload)
-    async def update_variable_choices():
-        file: list[FileInfo] = input.file_upload()
-        if file and len(file) > 0:
-            # Announce file upload start
-            await announce_to_screen_reader("Processing uploaded CSV file...")
-            
-            df = pd.read_csv(file[0]["datapath"])
-            uploaded_data.set(df)
-            numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
-            categorical_vars = df.select_dtypes(include="object").columns.tolist()
-            
-            # Announce successful file processing
-            total_vars = len(df.columns)
-            rows_count = len(df)
-            await announce_to_screen_reader(f"File uploaded successfully. Dataset contains {rows_count} rows and {total_vars} variables: {len(numeric_vars)} numeric and {len(categorical_vars)} categorical variables.")
+    async def handle_file_upload():
+        """Handle CSV file upload"""
+        if input.file_upload() is not None:
+            try:
+                file_info = input.file_upload()[0]
+                df = pd.read_csv(file_info["datapath"])
+                uploaded_data.set(df)
+                await announce_to_screen_reader(f"File uploaded successfully with {len(df)} rows and {len(df.columns)} columns")
+            except Exception as e:
+                await announce_to_screen_reader(f"Error uploading file: {str(e)}")
+                print(f"File upload error: {e}")
 
-            # Update dropdown choices for plots in Practice tab
-            ui.update_select(
-                "plot_type",
-                choices=[
-                    "",
-                    "Histogram",
-                    "Box Plot",
-                    "Scatter Plot",
-                    "Bar Plot",
-                    "Line Plot",
-                    "Heatmap",
-                    "Multiline Plot",
-                    "Multilayer Plot",
-                    "Multipanel Plot"
-                ],
-            )
-            ui.update_select("var_boxplot_x", choices=[""] + numeric_vars)
-            ui.update_select("var_boxplot_y", choices=[""] + categorical_vars)
-
+    # Data types table
     @output
     @render.table
     def data_types():
+        """Display data types of uploaded file"""
         df = uploaded_data.get()
         if df is not None:
-            data_summary = pd.DataFrame(
-                {
-                    "Variable": df.columns,
-                    "Data Type": df.dtypes.astype(str).replace(
-                        {
-                            "object": "categorical",
-                            "int64": "numeric",
-                            "float64": "numeric",
-                        }
-                    ),
-                }
-            )
-            return data_summary
+            summary = pd.DataFrame({
+                'Column': df.columns,
+                'Type': [str(df[col].dtype) for col in df.columns],
+                'Non-null': [df[col].count() for col in df.columns]
+            })
+            return summary
+        return pd.DataFrame()
 
+    # Plot options dropdown
     @output
     @render.ui
     def plot_options():
+        """Render plot type selection dropdown"""
         df = uploaded_data.get()
         if df is not None:
-            return ui.div(
-                ui.input_select(
-                    "plot_type",
-                    "Select plot type:",
-                    choices=[
-                        "",
-                        "Histogram",
-                        "Box Plot",
-                        "Scatter Plot",
-                        "Bar Plot",
-                        "Line Plot",
-                        "Heatmap",
-                        "Multiline Plot",
-                        "Multilayer Plot",
-                        "Multipanel Plot"
-                    ],
-                    selected="",
-                ),
-                ui.input_select(
-                    "plot_color",
-                    "Select plot color:",
-                    choices=list(color_palettes.keys()),
-                    selected="Default",
-                ),
+            return ui.input_select(
+                "plot_type",
+                "Select plot type:",
+                choices=[""] + [
+                    "Histogram",
+                    "Box Plot", 
+                    "Scatter Plot",
+                    "Bar Plot",
+                    "Line Plot",
+                    "Heatmap"
+                ]
             )
         return ui.div()
 
+    # Variable input based on plot type
     @output
     @render.ui
     def variable_input():
+        """Render variable selection based on plot type"""
         df = uploaded_data.get()
-        plot_type = input.plot_type()
-
+        plot_type = getattr(input, 'plot_type', lambda: None)()
+        
         if df is not None and plot_type:
-            numeric_vars = df.select_dtypes(include=np.number).columns.tolist()
-            categorical_vars = df.select_dtypes(include="object").columns.tolist()
-            all_vars = df.columns.tolist()
-
+            numeric_cols = [col for col in df.columns if df[col].dtype in ['int64', 'float64']]
+            categorical_cols = [col for col in df.columns if df[col].dtype == 'object']
+            
             if plot_type == "Histogram":
-                return ui.input_select(
-                    "var_histogram",
-                    "Select variable for Histogram:",
-                    choices=[""] + numeric_vars,
+                return ui.div(
+                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
+                    ui.input_select("hist_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Box Plot":
                 return ui.div(
-                    ui.input_select(
-                        "var_boxplot_x",
-                        "Select numerical variable for X-axis:",
-                        choices=[""] + numeric_vars,
-                    ),
-                    ui.input_select(
-                        "var_boxplot_y",
-                        "Select categorical variable for Y-axis (optional):",
-                        choices=[""] + categorical_vars,
-                        selected="",
-                    ),
+                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
+                    ui.input_select("var_y", "Select grouping variable (optional):", choices=["None"] + categorical_cols, selected="None"),
+                    ui.input_select("boxplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Scatter Plot":
+                # For scatter plot, filter Y choices to exclude selected X variable
+                var_x = getattr(input, 'var_x', lambda: "")()
+                y_choices = [""] + [col for col in numeric_cols if col != var_x]
                 return ui.div(
-                    ui.input_select(
-                        "var_scatter_x",
-                        "Select X variable:",
-                        choices=[""] + numeric_vars,
-                    ),
-                    ui.output_ui("var_scatter_y_output"),
+                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
+                    ui.input_select("var_y", "Select Y variable:", choices=y_choices),
+                    ui.input_select("scatter_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Bar Plot":
-                return ui.input_select(
-                    "var_bar_plot",
-                    "Select variable for Bar Plot:",
-                    choices=[""] + categorical_vars,
-                )
-            elif plot_type == "Line Plot":
                 return ui.div(
-                    ui.input_select(
-                        "var_line_x", 
-                        "Select X variable:", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.output_ui("var_line_y_output"),
-                )
-            elif plot_type == "Heatmap":
-                return ui.div(
-                    ui.input_select(
-                        "var_heatmap_x", 
-                        "Select X variable (categorical):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.input_select(
-                        "var_heatmap_y", 
-                        "Select Y variable (categorical):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.input_select(
-                        "var_heatmap_value", 
-                        "Select value variable (numeric):", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "heatmap_colorscale",
-                        "Select color palette:",
-                        choices=["YlOrRd", "viridis", "plasma", "inferno", "RdBu_r", "coolwarm"],
-                        selected="YlOrRd",
-                    )
-                )
-            elif plot_type == "Multiline Plot":
-                return ui.div(
-                    ui.input_select(
-                        "var_multiline_x", 
-                        "Select X variable (numeric):", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.output_ui("var_multiline_y_output"),
-                    ui.input_select(
-                        "var_multiline_group", 
-                        "Select grouping variable (categorical):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.input_select(
-                        "multiline_palette",
-                        "Select color palette:",
-                        choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
-                        selected="Default",
-                    )
-                )
-            elif plot_type == "Multilayer Plot":
-                return ui.div(
-                    ui.input_select(
-                        "var_multilayer_x", 
-                        "Select X variable (categorical):", 
-                        choices=[""] + categorical_vars + numeric_vars
-                    ),
-                    ui.input_select(
-                        "var_multilayer_background", 
-                        "Select Background variable (numeric):", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "var_multilayer_line", 
-                        "Select Line variable (numeric):", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "multilayer_background_type", 
-                        "Select background plot type:", 
-                        choices=["Bar Plot", "Histogram", "Scatter Plot"],
-                        selected="Bar Plot"
-                    ),
-                    ui.input_select(
-                        "multilayer_background_color",
-                        "Select background color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.input_select(
-                        "multilayer_line_color",
-                        "Select line color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    )
-                )
-            elif plot_type == "Multipanel Plot":
-                return ui.div(
-                    ui.input_select(
-                        "multipanel_layout_custom", 
-                        "Select layout type:", 
-                        choices=["Grid 2x2", "Row", "Column", "Mixed"],
-                        selected="Grid 2x2"
-                    ),
-                    ui.input_select(
-                        "multipanel_color_custom",
-                        "Select color palette:",
-                        choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
-                        selected="Default",
-                    ),
-                    ui.h4("Subplot 1:"),
-                    ui.input_select(
-                        "multipanel_plot1_type", 
-                        "Plot type:", 
-                        choices=["line", "bar", "scatter", "hist", "multiline"],
-                        selected="line"
-                    ),
-                    ui.input_select(
-                        "multipanel_plot1_x", 
-                        "X variable:", 
-                        choices=[""] + all_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot1_y", 
-                        "Y variable:", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot1_group", 
-                        "Group variable (for multiline):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.h4("Subplot 2:"),
-                    ui.input_select(
-                        "multipanel_plot2_type", 
-                        "Plot type:", 
-                        choices=["line", "bar", "scatter", "hist", "multiline"],
-                        selected="bar"
-                    ),
-                    ui.input_select(
-                        "multipanel_plot2_x", 
-                        "X variable:", 
-                        choices=[""] + all_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot2_y", 
-                        "Y variable:", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot2_group", 
-                        "Group variable (for multiline):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.h4("Subplot 3:"),
-                    ui.input_select(
-                        "multipanel_plot3_type", 
-                        "Plot type:", 
-                        choices=["line", "bar", "scatter", "hist", "multiline"],
-                        selected="scatter"
-                    ),
-                    ui.input_select(
-                        "multipanel_plot3_x", 
-                        "X variable:", 
-                        choices=[""] + all_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot3_y", 
-                        "Y variable:", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot3_group", 
-                        "Group variable (for multiline):", 
-                        choices=[""] + categorical_vars
-                    ),
-                    ui.h4("Subplot 4:"),
-                    ui.input_select(
-                        "multipanel_plot4_type", 
-                        "Plot type:", 
-                        choices=["line", "bar", "scatter", "hist", "multiline"],
-                        selected="hist"
-                    ),
-                    ui.input_select(
-                        "multipanel_plot4_x", 
-                        "X variable:", 
-                        choices=[""] + all_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot4_y", 
-                        "Y variable:", 
-                        choices=[""] + numeric_vars
-                    ),
-                    ui.input_select(
-                        "multipanel_plot4_group", 
-                        "Group variable (for multiline):", 
-                        choices=[""] + categorical_vars
-                    )
+                    ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
+                    ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
         return ui.div()
 
-    # Dynamic Y variable selection for Scatter Plot
-    @output
-    @render.ui
-    def var_scatter_y_output():
-        df = uploaded_data.get()
-        if df is not None:
-            x_var = input.var_scatter_x()
-            y_choices = [""] + [
-                var
-                for var in df.select_dtypes(include=np.number).columns
-                if var != x_var
-            ]
-            return ui.input_select(
-                "var_scatter_y", "Select Y variable:", choices=y_choices
-            )
-        return ui.div()
-
-    # Dynamic Y variable selection for Line Plot
-    @output
-    @render.ui
-    def var_line_y_output():
-        df = uploaded_data.get()
-        if df is not None:
-            x_var = input.var_line_x()
-            y_choices = [""] + [
-                var
-                for var in df.select_dtypes(include=np.number).columns
-                if var != x_var
-            ]
-            return ui.input_select(
-                "var_line_y", "Select Y variable:", choices=y_choices
-            )
-        return ui.div()
-
-    # Dynamic Y variable selection for Multiline Plot
-    @output
-    @render.ui
-    def var_multiline_y_output():
-        df = uploaded_data.get()
-        if df is not None:
-            x_var = input.var_multiline_x()
-            y_choices = [""] + [
-                var
-                for var in df.select_dtypes(include=np.number).columns
-                if var != x_var
-            ]
-            return ui.input_select(
-                "var_multiline_y", "Select Y variable:", choices=y_choices
-            )
-        return ui.div()
-
+    # Custom plot creation
     @output
     @render_maidr
-    async def create_custom_plot():
+    def create_custom_plot():
+        """Create custom plot based on user data and selections"""
         df = uploaded_data.get()
-        plot_type = input.plot_type()
+        plot_type = getattr(input, 'plot_type', lambda: None)()
         
-        if df is None or not plot_type:
+        if df is None or not plot_type or plot_type == "":
             return None
             
-        color = color_palettes[input.plot_color()]
-        theme = input.theme()
-
-        # Announce plot generation start
-        await announce_to_screen_reader(f"Generating custom {plot_type.lower()} using your uploaded data...")
-
         try:
-            fig = plt.figure()
-            if plot_type == "Histogram":
-                var = input.var_histogram()
-                if not var:
-                    await announce_to_screen_reader("Please select a variable for the histogram")
+            ax = None
+            
+            if plot_type == "Histogram" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
+                color = color_palettes.get(getattr(input, 'hist_custom_color', lambda: 'Default')(), 'skyblue')
+                ax = create_custom_histogram(df, input.var_x(), color, input.theme())
+                
+            elif plot_type == "Box Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
+                color = color_palettes.get(getattr(input, 'boxplot_custom_color', lambda: 'Default')(), 'skyblue')
+                var_y = getattr(input, 'var_y', lambda: 'None')()
+                var_y = None if var_y == 'None' or var_y == "" else var_y
+                ax = create_custom_boxplot(df, input.var_x(), var_y, color, input.theme())
+                
+            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "" and input.var_x() != input.var_y():
+                color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
+                ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
+                
+            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
+                color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
+                ax = create_custom_barplot(df, input.var_x(), color, input.theme())
+            
+            if ax is not None:
+                # Check if ax is actually an axes object, not a list
+                if isinstance(ax, list):
+                    print(f"ERROR: Custom plot function returned a list instead of axes object: {type(ax)}")
                     return None
-                result = create_custom_histogram(df, var, color, theme)
-                # Store the figure for download
-                current_figure.set(plt.gcf())
-                await announce_to_screen_reader(f"Custom histogram completed using variable {var}. Plot is now accessible for exploration.")
-                return result
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
                 
-            elif plot_type == "Box Plot":
-                var_x = input.var_boxplot_x()
-                var_y = input.var_boxplot_y()
-                if not var_x:
-                    await announce_to_screen_reader("Please select an X variable for the box plot")
-                    return None
-                result = create_custom_boxplot(df, var_x, var_y, color, theme)
-                current_figure.set(plt.gcf())
-                var_info = f" by {var_y}" if var_y else ""
-                await announce_to_screen_reader(f"Custom box plot completed using variable {var_x}{var_info}. Plot is now accessible for exploration.")
-                return result
-                
-            elif plot_type == "Scatter Plot":
-                var_x = input.var_scatter_x()
-                var_y = input.var_scatter_y()
-                if not var_x or not var_y:
-                    await announce_to_screen_reader("Please select both X and Y variables for the scatter plot")
-                    return None
-                result = create_custom_scatterplot(df, var_x, var_y, color, theme)
-                current_figure.set(plt.gcf())
-                await announce_to_screen_reader(f"Custom scatter plot completed showing {var_x} versus {var_y}. Plot is now accessible for exploration.")
-                return result
-                
-            elif plot_type == "Bar Plot":
-                var = input.var_bar_plot()
-                if not var:
-                    await announce_to_screen_reader("Please select a variable for the bar plot")
-                    return None
-                result = create_custom_barplot(df, var, color, theme)
-                current_figure.set(plt.gcf())
-                await announce_to_screen_reader(f"Custom bar plot completed using variable {var}. Plot is now accessible for exploration.")
-                return result
-                
-            elif plot_type == "Line Plot":
-                var_x = input.var_line_x()
-                var_y = input.var_line_y()
-                if not var_x or not var_y:
-                    await announce_to_screen_reader("Please select both X and Y variables for the line plot")
-                    return None
-                result = create_custom_lineplot(df, var_x, var_y, color, theme)
-                current_figure.set(plt.gcf())
-                await announce_to_screen_reader(f"Custom line plot completed showing {var_x} versus {var_y}. Plot is now accessible for exploration.")
-                return result
-                
-            elif plot_type == "Heatmap":
-                var_x = input.var_heatmap_x()
-                var_y = input.var_heatmap_y()
-                var_value = input.var_heatmap_value()
-                if not var_x or not var_y or not var_value:
-                    await announce_to_screen_reader("Please select X, Y, and value variables for the heatmap")
-                    return None
-                colorscale = input.heatmap_colorscale()
-                result = create_custom_heatmap(df, var_x, var_y, var_value, colorscale, theme)
-                current_figure.set(plt.gcf())
-                return result
-                
-            elif plot_type == "Multiline Plot":
-                var_x = input.var_multiline_x()
-                var_y = input.var_multiline_y()
-                var_group = input.var_multiline_group()
-                palette = input.multiline_palette()
-                result = create_custom_multiline_plot(df, var_x, var_y, var_group, palette, theme)
-                current_figure.set(plt.gcf())
-                return result
-                
-            elif plot_type == "Multilayer Plot":
-                var_x = input.var_multilayer_x()
-                var_background = input.var_multilayer_background()
-                var_line = input.var_multilayer_line()
-                background_type = input.multilayer_background_type()
-                background_color = input.multilayer_background_color()
-                line_color = input.multilayer_line_color()
-                result = create_custom_multilayer_plot(
-                    df, var_x, var_background, var_line, background_type, 
-                    background_color, line_color, theme
-                )
-                current_figure.set(plt.gcf())
-                return result
-                
-            elif plot_type == "Multipanel Plot":
-                # Create config dictionary for multipanel plot
-                vars_config = {
-                    'plot1': {
-                        'type': input.multipanel_plot1_type(),
-                        'x': input.multipanel_plot1_x(),
-                        'y': input.multipanel_plot1_y(),
-                        'group': input.multipanel_plot1_group()
-                    },
-                    'plot2': {
-                        'type': input.multipanel_plot2_type(),
-                        'x': input.multipanel_plot2_x(),
-                        'y': input.multipanel_plot2_y(),
-                        'group': input.multipanel_plot2_group()
-                    },
-                    'plot3': {
-                        'type': input.multipanel_plot3_type(),
-                        'x': input.multipanel_plot3_x(),
-                        'y': input.multipanel_plot3_y(),
-                        'group': input.multipanel_plot3_group()
-                    },
-                    'plot4': {
-                        'type': input.multipanel_plot4_type(),
-                        'x': input.multipanel_plot4_x(),
-                        'y': input.multipanel_plot4_y(),
-                        'group': input.multipanel_plot4_group()
-                    }
-                }
-                
-                layout_type = input.multipanel_layout_custom()
-                color_palette = input.multipanel_color_custom()
-                
-                result = create_custom_multipanel_plot(
-                    df, vars_config, layout_type, color_palette, theme
-                )
-                # For multipanel plots, get figure from the axes object
-                if result is not None:
-                    current_figure.set(result.get_figure())
-                return result
-                
-            return None
         except Exception as e:
-            print(f"Error generating plot: {str(e)}")
+            print(f"Error creating custom plot: {e}")
             return None
 
-    # Handle saving SVG to Downloads folder
+    # SVG save button handler
     @reactive.effect
     @reactive.event(input.save_svg_button)
     async def save_svg_to_downloads():
-        # Get the current figure
+        """Save current plot as SVG to Downloads folder"""
         fig = current_figure.get()
         
         if fig is None:
             await announce_to_screen_reader("No plot available to save")
-            ui.notification_show("No plot available to save", type="warning")
             return
         
-        # Announce save process start
-        await announce_to_screen_reader("Saving plot as SVG file to Downloads folder...")
-        
         try:
-            # Create a unique filename with timestamp
-            plot_type = input.plot_type() if input.plot_type() else "plot"
+            plot_type = getattr(input, 'plot_type', lambda: 'plot')()
             filename = f"{plot_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.svg"
             
-            # Get the Downloads folder path - handle both local and deployed environments
-            try:
-                # Try user's Downloads folder first
-                downloads_folder = str(Path.home() / "Downloads")
-                if not os.path.exists(downloads_folder):
-                    # Fallback to current working directory
-                    downloads_folder = os.getcwd()
-                filepath = os.path.join(downloads_folder, filename)
-            except Exception:
-                # Final fallback to current directory
+            downloads_folder = str(Path.home() / "Downloads")
+            if not os.path.exists(downloads_folder):
                 downloads_folder = os.getcwd()
-                filepath = os.path.join(downloads_folder, filename)
+            filepath = os.path.join(downloads_folder, filename)
 
-            # Save the figure directly, avoid temporary figure creation
             fig.savefig(filepath, format='svg', bbox_inches='tight')
+            await announce_to_screen_reader(f"SVG file saved successfully as {filename}")
             
-            await announce_to_screen_reader(f"SVG file saved successfully as {filename} in Downloads folder")
-            ui.notification_show(f"Plot saved to Downloads as {filename}", type="success")
         except Exception as e:
             await announce_to_screen_reader(f"Error saving SVG file: {str(e)}")
-            ui.notification_show(f"Error saving plot: {str(e)}", type="error")
-
-    # Handle saving HTML to Downloads folder
+            print(f"SVG save error: {e}")
+    
+    # Add reactive effects to announce changes to screen readers
     @reactive.effect
-    @reactive.event(input.save_html_button)
-    async def save_html_to_downloads():
-        # Announce save process start
-        await announce_to_screen_reader("Saving accessible plot as HTML file to Downloads folder...")
+    async def announce_plot_type_change():
         try:
-            # Create a unique filename with timestamp
-            filename = f"accessible_plot_{uuid.uuid4().hex[:8]}.html"
-            
-            # Get the Downloads folder path - handle both local and deployed environments
-            try:
-                # Try user's Downloads folder first
-                downloads_folder = str(Path.home() / "Downloads")
-                if not os.path.exists(downloads_folder):
-                    # Fallback to current working directory
-                    downloads_folder = os.getcwd()
-                filepath = os.path.join(downloads_folder, filename)
-            except Exception:
-                # Final fallback to current directory
-                downloads_folder = os.getcwd()
-                filepath = os.path.join(downloads_folder, filename)
+            if uploaded_data.get() is not None and hasattr(input, 'plot_type') and input.plot_type() and input.plot_type() != "":
+                plot_type = input.plot_type()
+                await announce_to_screen_reader(f"Plot type changed to {plot_type}. Please select appropriate variables for this plot type.")
+        except:
+            pass
+    
+    @reactive.effect
+    async def announce_histogram_changes():
+        distribution_type = input.distribution_type()
+        hist_color = input.hist_color()
+        if distribution_type and hist_color:
+            await announce_to_screen_reader(f"Histogram settings updated: {distribution_type} distribution with {hist_color} colors")
 
-            # Get the current figure
-            fig = current_figure.get()
-            if fig is None:
-                # Try to get the current plot from matplotlib
-                fig = plt.gcf()
-                if fig and fig.get_axes():
-                    current_figure.set(fig)
-                    print(f"Save HTML: Using fallback figure with {len(fig.axes)} axes")
-                else:
-                    await announce_to_screen_reader("No plot available to save")
-                    ui.notification_show("No plot available to save", type="warning")
-                    print("Save HTML: No valid figure found")
-                    return
-            else:
-                print(f"Save HTML: Using stored figure with {len(fig.axes)} axes")
-            
-            # Save original environment encoding settings
-            original_encoding = os.environ.get('PYTHONIOENCODING', '')
-            
-            try:
-                # Use maidr.save_html to save the plot
-                maidr.save_html(fig, filepath)
-                
-                # Store the file path for download
-                last_saved_file.set(filepath)
-                
-            except Exception as e:
-                raise e
-            
-            await announce_to_screen_reader(f"Accessible HTML file saved successfully as {filename}. Click 'Download HTML' to download it.")
-            ui.notification_show(f"Accessible plot saved as {filename}. Click 'Download HTML' to download.", type="success")
-            
-        except Exception as e:
-            await announce_to_screen_reader(f"Error saving HTML file: {str(e)}")
-            ui.notification_show(f"Error saving HTML: {str(e)}", type="error")
+    @reactive.effect
+    async def announce_boxplot_changes():
+        boxplot_type = input.boxplot_type()
+        boxplot_color = input.boxplot_color()
+        if boxplot_type and boxplot_color:
+            await announce_to_screen_reader(f"Box plot settings updated: {boxplot_type} with {boxplot_color} colors")
 
-    # Handle downloading HTML file
-    @output
-    @render.download(filename=lambda: f"accessible_plot_{uuid.uuid4().hex[:8]}.html")
-    def download_html():
-        filepath = last_saved_file.get()
-        if filepath and os.path.exists(filepath):
-            return filepath
+    @reactive.effect
+    async def announce_scatter_changes():
+        scatterplot_type = input.scatterplot_type()
+        scatter_color = input.scatter_color()
+        if scatterplot_type and scatter_color:
+            await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
+
+# Function to extract embed content from full HTML
+def extract_embed_content(html_content):
+    """Extract div content and wrap in iframe with sandbox for secure embedding"""
+    import re
+    import html
+    
+    # Find the content between <body> and </body>
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.DOTALL | re.IGNORECASE)
+    
+    if body_match:
+        body_content = body_match.group(1).strip()
+    else:
+        # Fallback: try to find the main div with MAIDR content
+        # Look for the div that contains the link and script
+        div_match = re.search(r'(<div[^>]*>.*?<link.*?maidr.*?<script.*?</script>.*?<div.*?</div>\s*</div>)', html_content, re.DOTALL | re.IGNORECASE)
+        
+        if div_match:
+            body_content = div_match.group(1).strip()
         else:
-            # If no saved file, create one on the fly
-            fig = current_figure.get()
-            if fig is None:
-                fig = plt.gcf()
-            
-            if fig and fig.get_axes():
-                # Create temporary file
-                import tempfile
-                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
-                temp_filepath = temp_file.name
-                temp_file.close()
-                
-                try:
-                    maidr.save_html(fig, temp_filepath)
-                    return temp_filepath
-                except Exception as e:
-                    raise Exception(f"Error creating download file: {str(e)}")
-            else:
-                raise Exception("No plot available to download")
+            # If we can't parse it properly, return an error message
+            return "<!-- Error: Could not extract embed content from generated HTML -->"
+    
+    # Create a complete HTML document for the iframe
+    iframe_html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+{body_content}
+</body>
+</html>'''
+    
+    # Escape the HTML for use in srcdoc attribute
+    escaped_html = html.escape(iframe_html, quote=True)
+    
+    # Create iframe with sandbox attributes for security
+    # Allow scripts and same-origin for MAIDR functionality while maintaining security
+    iframe_embed = f'''<iframe 
+    srcdoc="{escaped_html}"
+    style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 4px;"
+    sandbox="allow-scripts allow-same-origin"
+    title="Accessible Interactive Plot with MAIDR">
+</iframe>'''
+    
+    return iframe_embed
 
-# Create the app
+# Create the Shiny app
 app = App(app_ui, server)
-
-# Run the app
-if __name__ == "__main__":
-    app.run()
