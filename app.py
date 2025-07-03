@@ -24,7 +24,27 @@ def save_html_utf8(fig, filepath):
     import sys
     import codecs
     import os
+    import builtins
     from contextlib import redirect_stdout, redirect_stderr
+    
+    # Store original open function
+    original_open = builtins.open
+    
+    def utf8_open(*args, **kwargs):
+        """Wrapper for open() that forces UTF-8 encoding for text files"""
+        # If mode contains 'w' or 'a' and no encoding is specified, use UTF-8
+        if len(args) >= 2:
+            mode = args[1]
+            if isinstance(mode, str) and ('w' in mode or 'a' in mode) and 'b' not in mode:
+                if 'encoding' not in kwargs:
+                    kwargs['encoding'] = 'utf-8'
+        elif 'mode' in kwargs:
+            mode = kwargs['mode']
+            if isinstance(mode, str) and ('w' in mode or 'a' in mode) and 'b' not in mode:
+                if 'encoding' not in kwargs:
+                    kwargs['encoding'] = 'utf-8'
+        
+        return original_open(*args, **kwargs)
     
     # Capture stdout/stderr during maidr.save_html to avoid encoding issues
     old_stdout = sys.stdout
@@ -37,14 +57,17 @@ def save_html_utf8(fig, filepath):
         
         # Redirect to UTF-8 buffers during maidr.save_html
         with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-            # Create temp file with UTF-8 encoding using codecs
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
-            temp_path = temp_file.name
-            temp_file.close()
+            # Monkey patch the open function to force UTF-8
+            builtins.open = utf8_open
             
             try:
-                # Try to save directly first - maidr might handle encoding properly
+                # Create temp file with UTF-8 encoding using codecs
+                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
+                temp_path = temp_file.name
+                temp_file.close()
+                
                 try:
+                    # Try to save directly with monkey-patched open
                     maidr.save_html(fig, temp_path)
                     
                     # Verify the file was created and has content
@@ -60,40 +83,53 @@ def save_html_utf8(fig, filepath):
                         raise Exception("MAIDR save_html produced no output or empty file")
                         
                 except Exception as maidr_error:
-                    # If direct save fails, try with a different approach
-                    print(f"Direct maidr.save_html failed: {maidr_error}")
+                    print(f"Monkey-patched maidr.save_html failed: {maidr_error}")
                     
-                    # Create a new temp path for retry
-                    temp_path_retry = temp_path + "_retry"
+                    # Fallback: try saving with maidr to a different temp file and post-process
+                    temp_path_fallback = temp_path + "_fallback"
                     
-                    # Try saving to a path with explicit UTF-8 handling
-                    # This approach avoids monkey-patching by controlling our temp file creation
-                    with codecs.open(temp_path_retry, 'w', encoding='utf-8') as temp_f:
-                        # Close the file so maidr can write to it
-                        pass
-                    
-                    # Now let maidr write to the file
-                    maidr.save_html(fig, temp_path_retry)
-                    
-                    # Read and copy with explicit UTF-8 handling
-                    with codecs.open(temp_path_retry, 'r', encoding='utf-8', errors='replace') as temp_f:
-                        content = temp_f.read()
-                    
-                    with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
-                        final_f.write(content)
-                    
-                    # Clean up retry temp file
                     try:
-                        os.unlink(temp_path_retry)
+                        # Let maidr save however it wants to the fallback path
+                        maidr.save_html(fig, temp_path_fallback)
+                        
+                        # Read the file and re-encode as UTF-8
+                        # Try multiple encodings to read the file
+                        content = None
+                        for encoding in ['utf-8', 'cp1252', 'latin1', 'ascii']:
+                            try:
+                                with open(temp_path_fallback, 'r', encoding=encoding, errors='replace') as f:
+                                    content = f.read()
+                                break
+                            except UnicodeDecodeError:
+                                continue
+                        
+                        if content is None:
+                            raise Exception("Could not read saved HTML file with any encoding")
+                        
+                        # Write to final destination with explicit UTF-8
+                        with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
+                            final_f.write(content)
+                        
+                        # Clean up fallback temp file
+                        try:
+                            os.unlink(temp_path_fallback)
+                        except:
+                            pass
+                            
+                    except Exception as fallback_error:
+                        print(f"Fallback approach also failed: {fallback_error}")
+                        raise Exception(f"All encoding workarounds failed: {maidr_error}, {fallback_error}")
+                        
+                finally:
+                    # Clean up temp file
+                    try:
+                        os.unlink(temp_path)
                     except:
                         pass
-                    
+                        
             finally:
-                # Clean up temp file
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
+                # Restore original open function
+                builtins.open = original_open
                     
     finally:
         # Restore original stdout/stderr
@@ -208,6 +244,67 @@ app_ui = ui.page_fluid(
             Shiny.addCustomMessageHandler("show_help", function(message) {
                 // Trigger the help modal
                 Shiny.setInputValue("show_help_modal", Math.random());
+            });
+            
+            Shiny.addCustomMessageHandler("download_file", function(data) {
+                console.log('Download triggered for:', data.filename);
+                
+                try {
+                    // Create a blob from the HTML content
+                    var blob = new Blob([data.content], { type: 'text/html;charset=utf-8' });
+                    console.log('Blob created:', blob.size, 'bytes');
+                    
+                    // Check if the browser supports the download attribute
+                    if (typeof document.createElement('a').download !== 'undefined') {
+                        console.log('Using download attribute method');
+                        
+                        // Create a download link
+                        var link = document.createElement('a');
+                        var url = window.URL.createObjectURL(blob);
+                        link.href = url;
+                        link.download = data.filename;
+                        link.style.display = 'none';
+                        
+                        // Add to document
+                        document.body.appendChild(link);
+                        console.log('Link added to document');
+                        
+                        // Trigger click immediately
+                        link.click();
+                        console.log('Link clicked');
+                        
+                        // Clean up after a short delay
+                        setTimeout(function() {
+                            try {
+                                document.body.removeChild(link);
+                                window.URL.revokeObjectURL(url);
+                                console.log('Cleanup completed');
+                            } catch (e) {
+                                console.log('Cleanup error:', e);
+                            }
+                        }, 1000);
+                        
+                    } else {
+                        console.log('Using fallback method');
+                        // Fallback for older browsers
+                        var url = window.URL.createObjectURL(blob);
+                        var newWindow = window.open(url, '_blank');
+                        if (!newWindow) {
+                            console.log('Popup blocked, trying alternative');
+                            // If popup is blocked, try alternative
+                            window.location.href = url;
+                        }
+                        setTimeout(function() {
+                            window.URL.revokeObjectURL(url);
+                        }, 1000);
+                    }
+                    
+                    announceToScreenReader('Download started: ' + data.filename);
+                    
+                } catch (e) {
+                    console.error('Download error:', e);
+                    announceToScreenReader('Download failed: ' + e.message);
+                }
             });
             
             Shiny.addCustomMessageHandler("show_embed_modal", function(embedCode) {
@@ -333,17 +430,6 @@ app_ui = ui.page_fluid(
             ),
             ui.nav_control(
                 ui.div(
-                    ui.download_button(
-                        "download_html",
-                        "Download HTML",
-                        class_="btn btn-secondary",
-                    ),
-                    ui.input_action_button(
-                        "embed_code_button",
-                        "Embed Code",
-                        class_="btn btn-success",
-                        title="Get embed code for your website"
-                    ),
                     ui.input_action_button(
                         "help_button",
                         "📚 Help (h)",
@@ -371,7 +457,19 @@ app_ui = ui.page_fluid(
                     ui.div(
                         ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
                                               class_="btn btn-primary"),
-                        class_="text-center mb-3"
+                        ui.input_action_button(
+                            "download_html_custom",
+                            "Download HTML",
+                            class_="btn btn-secondary",
+                        ),
+                        ui.input_action_button(
+                            "embed_code_button_custom",
+                            "Embed Code",
+                            class_="btn btn-success",
+                            title="Get embed code for your website"
+                        ),
+                        class_="text-center mb-3",
+                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
                     ),
                     ui.div(
                         ui.output_ui("create_custom_plot"),
@@ -402,6 +500,21 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default",
             ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_histogram",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_histogram",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+            ),
             ui.output_ui("create_histogram_output"),
         ),
         # Second tab: Box Plot with a single variable for Tutorial
@@ -423,6 +536,21 @@ app_ui = ui.page_fluid(
                 "Select box plot color:",
                 choices=list(color_palettes.keys()),
                 selected="Default",
+            ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_boxplot",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_boxplot",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
             ),
             ui.output_ui("create_boxplot_output"),
         ),
@@ -447,6 +575,21 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default",
             ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_scatter",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_scatter",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+            ),
             ui.output_ui("create_scatterplot_output"),
         ),
         # Fourth tab: Bar Plot with dropdowns and plot
@@ -457,6 +600,21 @@ app_ui = ui.page_fluid(
                 "Select bar plot color:",
                 choices=list(color_palettes.keys()),
                 selected="Default",
+            ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_barplot",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_barplot",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
             ),
             ui.output_ui("create_barplot_output"),
         ),
@@ -480,6 +638,21 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default",
             ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_lineplot",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_lineplot",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+            ),
             ui.output_ui("create_lineplot_output"),
         ),
         # New tab: Heatmap
@@ -494,6 +667,21 @@ app_ui = ui.page_fluid(
                     "Checkerboard",
                 ],
                 selected="Random",
+            ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_heatmap",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_heatmap",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
             ),
             ui.output_ui("create_heatmap_output"),
         ),
@@ -516,6 +704,21 @@ app_ui = ui.page_fluid(
                 "Select color palette:",
                 choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
                 selected="Default",
+            ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_multiline",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_multiline",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
             ),
             ui.output_ui("create_multiline_plot_output"),
         ),
@@ -544,6 +747,21 @@ app_ui = ui.page_fluid(
                 choices=list(color_palettes.keys()),
                 selected="Default",
             ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_multilayer",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_multilayer",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+            ),
             ui.output_ui("create_multilayer_plot_output"),
         ),
         
@@ -551,6 +769,21 @@ app_ui = ui.page_fluid(
         ui.nav_panel(
             "Multipanel Plot",
             ui.p("Three-panel plot with line plot and bar plots"),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_multipanel",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_multipanel",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+            ),
             ui.output_ui("create_multipanel_plot_output"),
         ),
         
@@ -579,6 +812,21 @@ app_ui = ui.page_fluid(
                     "Yearly",
                 ],
                 selected="Daily",
+            ),
+            ui.div(
+                ui.input_action_button(
+                    "download_html_candlestick",
+                    "Download HTML",
+                    class_="btn btn-secondary",
+                ),
+                ui.input_action_button(
+                    "embed_code_button_candlestick",
+                    "Embed Code",
+                    class_="btn btn-success",
+                    title="Get embed code for your website"
+                ),
+                class_="text-center mb-3",
+                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
             ),
             ui.output_ui("create_candlestick_output"),
         ),
@@ -631,10 +879,8 @@ def server(input, output, session):
         ui.modal_show(modal)
         await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
 
-    # Handle embed code button click
-    @reactive.effect
-    @reactive.event(input.embed_code_button)
-    async def embed_code_button_clicked():
+    # Generic function to handle embed code generation for any tab
+    async def handle_embed_code_generation():
         """Generate embed code with full HTML content that preserves MAIDR functionality"""
         try:
             # Get the current figure
@@ -685,6 +931,62 @@ def server(input, output, session):
             import traceback
             traceback.print_exc()
 
+    # Handle embed code button clicks for all tabs
+    @reactive.effect
+    @reactive.event(input.embed_code_button_custom)
+    async def embed_code_button_custom_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_histogram)
+    async def embed_code_button_histogram_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_boxplot)
+    async def embed_code_button_boxplot_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_scatter)
+    async def embed_code_button_scatter_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_barplot)
+    async def embed_code_button_barplot_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_lineplot)
+    async def embed_code_button_lineplot_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_heatmap)
+    async def embed_code_button_heatmap_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_multiline)
+    async def embed_code_button_multiline_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_multilayer)
+    async def embed_code_button_multilayer_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_multipanel)
+    async def embed_code_button_multipanel_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_candlestick)
+    async def embed_code_button_candlestick_clicked():
+        await handle_embed_code_generation()
+
     # Store embed code content
     embed_code_content = reactive.Value("")
 
@@ -725,11 +1027,9 @@ def server(input, output, session):
     async def update_theme():
         await session.send_custom_message("update_theme", input.theme())
 
-    # Add download HTML functionality
-    @output
-    @render.download(filename=lambda: f"accessible_plot_{uuid.uuid4().hex[:8]}.html")
-    def download_html():
-        """Download the current plot as HTML file"""
+    # Generic function to create HTML content and trigger download
+    async def trigger_html_download(plot_type_suffix):
+        """Generate HTML content and trigger browser download with save dialog"""
         try:
             # Get the current figure
             fig = current_figure.get()
@@ -737,7 +1037,8 @@ def server(input, output, session):
                 fig = plt.gcf()
             
             if not fig or not fig.get_axes():
-                raise Exception("No plot available to download")
+                await announce_to_screen_reader("No plot available to download")
+                return
             
             # Create temporary file
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
@@ -747,18 +1048,88 @@ def server(input, output, session):
             try:
                 # Save the HTML content with proper UTF-8 encoding
                 save_html_utf8(fig, temp_filepath)
-                return temp_filepath
-            except Exception as e:
-                # Clean up temp file on error
+                
+                # Read the HTML content
+                with open(temp_filepath, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                # Generate filename
+                filename = f"accessible_plot_{plot_type_suffix}_{uuid.uuid4().hex[:8]}.html"
+                
+                # Send to JavaScript for download
+                await session.send_custom_message("download_file", {
+                    "content": html_content,
+                    "filename": filename
+                })
+                
+                await announce_to_screen_reader(f"Download initiated for {filename}")
+                
+            finally:
+                # Clean up temp file
                 try:
                     os.unlink(temp_filepath)
                 except:
                     pass
-                raise Exception(f"Error creating HTML file: {str(e)}")
-                
+                    
         except Exception as e:
+            await announce_to_screen_reader(f"Error downloading HTML: {str(e)}")
             print(f"Download HTML error: {e}")
-            raise Exception(f"Error downloading HTML: {str(e)}")
+
+    # Handle download button clicks for all tabs
+    @reactive.effect
+    @reactive.event(input.download_html_custom)
+    async def download_html_custom_clicked():
+        await trigger_html_download("custom")
+
+    @reactive.effect
+    @reactive.event(input.download_html_histogram)
+    async def download_html_histogram_clicked():
+        await trigger_html_download("histogram")
+
+    @reactive.effect
+    @reactive.event(input.download_html_boxplot)
+    async def download_html_boxplot_clicked():
+        await trigger_html_download("boxplot")
+
+    @reactive.effect
+    @reactive.event(input.download_html_scatter)
+    async def download_html_scatter_clicked():
+        await trigger_html_download("scatter")
+
+    @reactive.effect
+    @reactive.event(input.download_html_barplot)
+    async def download_html_barplot_clicked():
+        await trigger_html_download("barplot")
+
+    @reactive.effect
+    @reactive.event(input.download_html_lineplot)
+    async def download_html_lineplot_clicked():
+        await trigger_html_download("lineplot")
+
+    @reactive.effect
+    @reactive.event(input.download_html_heatmap)
+    async def download_html_heatmap_clicked():
+        await trigger_html_download("heatmap")
+
+    @reactive.effect
+    @reactive.event(input.download_html_multiline)
+    async def download_html_multiline_clicked():
+        await trigger_html_download("multiline")
+
+    @reactive.effect
+    @reactive.event(input.download_html_multilayer)
+    async def download_html_multilayer_clicked():
+        await trigger_html_download("multilayer")
+
+    @reactive.effect
+    @reactive.event(input.download_html_multipanel)
+    async def download_html_multipanel_clicked():
+        await trigger_html_download("multipanel")
+
+    @reactive.effect
+    @reactive.event(input.download_html_candlestick)
+    async def download_html_candlestick_clicked():
+        await trigger_html_download("candlestick")
 
     # Add remaining reactive effects and output functions here
     
