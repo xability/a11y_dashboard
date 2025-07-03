@@ -4,8 +4,6 @@ import pandas as pd
 import seaborn as sns
 import uuid
 import os
-import base64
-import io
 import tempfile
 from pathlib import Path
 from matplotlib.backends.backend_svg import FigureCanvasSVG
@@ -22,13 +20,13 @@ from plots.boxplot import create_boxplot, create_custom_boxplot
 # Function to save HTML with UTF-8 encoding to avoid Windows encoding issues
 def save_html_utf8(fig, filepath):
     """Save matplotlib figure as HTML with proper UTF-8 encoding"""
-    import tempfile
     import io
     import sys
+    import codecs
     import os
     from contextlib import redirect_stdout, redirect_stderr
     
-    # Try to patch stdout/stderr encoding temporarily
+    # Capture stdout/stderr during maidr.save_html to avoid encoding issues
     old_stdout = sys.stdout
     old_stderr = sys.stderr
     
@@ -39,39 +37,56 @@ def save_html_utf8(fig, filepath):
         
         # Redirect to UTF-8 buffers during maidr.save_html
         with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-            # Create temp file with UTF-8 encoding
+            # Create temp file with UTF-8 encoding using codecs
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
             temp_path = temp_file.name
             temp_file.close()
             
             try:
-                # Force encoding at the file level
-                import codecs
-                
-                # Monkey patch open function temporarily to force UTF-8
-                original_open = open
-                def utf8_open(filename, mode='r', **kwargs):
-                    if 'encoding' not in kwargs and ('w' in mode or 'a' in mode):
-                        kwargs['encoding'] = 'utf-8'
-                    return original_open(filename, mode, **kwargs)
-                
-                # Replace builtin open temporarily
-                import builtins
-                builtins.open = utf8_open
-                
+                # Try to save directly first - maidr might handle encoding properly
                 try:
-                    # Call maidr.save_html with patched open
                     maidr.save_html(fig, temp_path)
-                finally:
-                    # Restore original open
-                    builtins.open = original_open
-                
-                # Read and copy to final destination with explicit UTF-8
-                with open(temp_path, 'r', encoding='utf-8', errors='replace') as temp_f:
-                    content = temp_f.read()
-                
-                with open(filepath, 'w', encoding='utf-8') as final_f:
-                    final_f.write(content)
+                    
+                    # Verify the file was created and has content
+                    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                        # Read with codecs to ensure proper UTF-8 handling
+                        with codecs.open(temp_path, 'r', encoding='utf-8', errors='replace') as temp_f:
+                            content = temp_f.read()
+                        
+                        # Write to final destination with codecs for explicit UTF-8
+                        with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
+                            final_f.write(content)
+                    else:
+                        raise Exception("MAIDR save_html produced no output or empty file")
+                        
+                except Exception as maidr_error:
+                    # If direct save fails, try with a different approach
+                    print(f"Direct maidr.save_html failed: {maidr_error}")
+                    
+                    # Create a new temp path for retry
+                    temp_path_retry = temp_path + "_retry"
+                    
+                    # Try saving to a path with explicit UTF-8 handling
+                    # This approach avoids monkey-patching by controlling our temp file creation
+                    with codecs.open(temp_path_retry, 'w', encoding='utf-8') as temp_f:
+                        # Close the file so maidr can write to it
+                        pass
+                    
+                    # Now let maidr write to the file
+                    maidr.save_html(fig, temp_path_retry)
+                    
+                    # Read and copy with explicit UTF-8 handling
+                    with codecs.open(temp_path_retry, 'r', encoding='utf-8', errors='replace') as temp_f:
+                        content = temp_f.read()
+                    
+                    with codecs.open(filepath, 'w', encoding='utf-8') as final_f:
+                        final_f.write(content)
+                    
+                    # Clean up retry temp file
+                    try:
+                        os.unlink(temp_path_retry)
+                    except:
+                        pass
                     
             finally:
                 # Clean up temp file
