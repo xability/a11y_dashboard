@@ -1020,15 +1020,14 @@ def server(input, output, session):
             return ui.input_select(
                 "plot_type",
                 "Select plot type:",
-                choices=[
+                choices=[""] + [
                     "Histogram",
                     "Box Plot", 
                     "Scatter Plot",
                     "Bar Plot",
                     "Line Plot",
                     "Heatmap"
-                ],
-                selected="Histogram"
+                ]
             )
         return ui.div()
 
@@ -1046,24 +1045,27 @@ def server(input, output, session):
             
             if plot_type == "Histogram":
                 return ui.div(
-                    ui.input_select("var_x", "Select numeric variable:", choices=numeric_cols),
+                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
                     ui.input_select("hist_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Box Plot":
                 return ui.div(
-                    ui.input_select("var_x", "Select numeric variable:", choices=numeric_cols),
+                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
                     ui.input_select("var_y", "Select grouping variable (optional):", choices=["None"] + categorical_cols, selected="None"),
                     ui.input_select("boxplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Scatter Plot":
+                # For scatter plot, filter Y choices to exclude selected X variable
+                var_x = getattr(input, 'var_x', lambda: "")()
+                y_choices = [""] + [col for col in numeric_cols if col != var_x]
                 return ui.div(
-                    ui.input_select("var_x", "Select X variable:", choices=numeric_cols),
-                    ui.input_select("var_y", "Select Y variable:", choices=numeric_cols),
+                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
+                    ui.input_select("var_y", "Select Y variable:", choices=y_choices),
                     ui.input_select("scatter_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Bar Plot":
                 return ui.div(
-                    ui.input_select("var_x", "Select categorical variable:", choices=categorical_cols),
+                    ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
                     ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
         return ui.div()
@@ -1076,27 +1078,27 @@ def server(input, output, session):
         df = uploaded_data.get()
         plot_type = getattr(input, 'plot_type', lambda: None)()
         
-        if df is None or not plot_type:
+        if df is None or not plot_type or plot_type == "":
             return None
             
         try:
             ax = None
             
-            if plot_type == "Histogram" and hasattr(input, 'var_x') and input.var_x():
+            if plot_type == "Histogram" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
                 color = color_palettes.get(getattr(input, 'hist_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_histogram(df, input.var_x(), color, input.theme())
                 
-            elif plot_type == "Box Plot" and hasattr(input, 'var_x') and input.var_x():
+            elif plot_type == "Box Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
                 color = color_palettes.get(getattr(input, 'boxplot_custom_color', lambda: 'Default')(), 'skyblue')
                 var_y = getattr(input, 'var_y', lambda: 'None')()
-                var_y = None if var_y == 'None' else var_y
+                var_y = None if var_y == 'None' or var_y == "" else var_y
                 ax = create_custom_boxplot(df, input.var_x(), var_y, color, input.theme())
                 
-            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y():
+            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "" and input.var_x() != input.var_y():
                 color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
                 
-            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x():
+            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
                 color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_barplot(df, input.var_x(), color, input.theme())
             
@@ -1144,7 +1146,7 @@ def server(input, output, session):
     @reactive.effect
     async def announce_plot_type_change():
         try:
-            if uploaded_data.get() is not None and hasattr(input, 'plot_type') and input.plot_type():
+            if uploaded_data.get() is not None and hasattr(input, 'plot_type') and input.plot_type() and input.plot_type() != "":
                 plot_type = input.plot_type()
                 await announce_to_screen_reader(f"Plot type changed to {plot_type}. Please select appropriate variables for this plot type.")
         except:
