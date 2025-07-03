@@ -6,6 +6,7 @@ import uuid
 import os
 import base64
 import io
+import tempfile
 from pathlib import Path
 from matplotlib.backends.backend_svg import FigureCanvasSVG
 from maidr.widget.shiny import render_maidr
@@ -17,6 +18,73 @@ from shiny.types import FileInfo
 from plots.utils import color_palettes
 from plots.histogram import create_histogram, create_custom_histogram
 from plots.boxplot import create_boxplot, create_custom_boxplot
+
+# Function to save HTML with UTF-8 encoding to avoid Windows encoding issues
+def save_html_utf8(fig, filepath):
+    """Save matplotlib figure as HTML with proper UTF-8 encoding"""
+    import tempfile
+    import io
+    import sys
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    # Try to patch stdout/stderr encoding temporarily
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    
+    try:
+        # Create temporary UTF-8 buffers
+        stdout_buffer = io.StringIO()
+        stderr_buffer = io.StringIO()
+        
+        # Redirect to UTF-8 buffers during maidr.save_html
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            # Create temp file with UTF-8 encoding
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            try:
+                # Force encoding at the file level
+                import codecs
+                
+                # Monkey patch open function temporarily to force UTF-8
+                original_open = open
+                def utf8_open(filename, mode='r', **kwargs):
+                    if 'encoding' not in kwargs and ('w' in mode or 'a' in mode):
+                        kwargs['encoding'] = 'utf-8'
+                    return original_open(filename, mode, **kwargs)
+                
+                # Replace builtin open temporarily
+                import builtins
+                builtins.open = utf8_open
+                
+                try:
+                    # Call maidr.save_html with patched open
+                    maidr.save_html(fig, temp_path)
+                finally:
+                    # Restore original open
+                    builtins.open = original_open
+                
+                # Read and copy to final destination with explicit UTF-8
+                with open(temp_path, 'r', encoding='utf-8', errors='replace') as temp_f:
+                    content = temp_f.read()
+                
+                with open(filepath, 'w', encoding='utf-8') as final_f:
+                    final_f.write(content)
+                    
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                    
+    finally:
+        # Restore original stdout/stderr
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
 from plots.scatterplot import create_scatterplot, create_custom_scatterplot
 from plots.barplot import create_barplot, create_custom_barplot
 from plots.lineplot import create_lineplot, create_custom_lineplot
@@ -58,6 +126,53 @@ app_ui = ui.page_fluid(
                 height: 1px;
                 overflow: hidden;
             }
+            .embed-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                display: none;
+            }
+            .embed-modal-content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                max-width: 80%;
+                max-height: 80%;
+                width: 600px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .embed-modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                border-bottom: 1px solid #dee2e6;
+                padding-bottom: 10px;
+            }
+            .embed-modal-body textarea {
+                width: 100%;
+                height: 300px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                border: 1px solid #ccc;
+                padding: 10px;
+                resize: vertical;
+            }
+            .embed-modal-footer {
+                margin-top: 15px;
+                text-align: right;
+            }
+            .embed-modal-footer button {
+                margin-left: 10px;
+            }
         """
         ),
         ui.tags.script(
@@ -79,6 +194,102 @@ app_ui = ui.page_fluid(
                 // Trigger the help modal
                 Shiny.setInputValue("show_help_modal", Math.random());
             });
+            
+            Shiny.addCustomMessageHandler("show_embed_modal", function(htmlContent) {
+                showEmbedModal(htmlContent);
+            });
+            
+            function showEmbedModal(htmlContent) {
+                // Create iframe embed code
+                var iframeCode = '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="utf-8"/>\n    <title>Embedded Accessible Plot</title>\n</head>\n<body style="margin: 0; padding: 20px;">\n    <iframe srcdoc="' + 
+                    htmlContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + 
+                    '" style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 4px;" title="Accessible Plot Visualization"></iframe>\n</body>\n</html>';
+                
+                // Create modal if it doesn't exist
+                var modal = document.getElementById('embed-modal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'embed-modal';
+                    modal.className = 'embed-modal';
+                    modal.innerHTML = 
+                        '<div class="embed-modal-content">' +
+                            '<div class="embed-modal-header">' +
+                                '<h4>Embed Code</h4>' +
+                                '<button type="button" id="embed-modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>' +
+                            '</div>' +
+                            '<div class="embed-modal-body">' +
+                                '<p>Copy the code below to embed this accessible plot in your website:</p>' +
+                                '<textarea id="embed-code-textarea" readonly></textarea>' +
+                            '</div>' +
+                            '<div class="embed-modal-footer">' +
+                                '<button type="button" id="copy-embed-code" class="btn btn-primary">Copy to Clipboard</button>' +
+                                '<button type="button" id="close-embed-modal" class="btn btn-secondary">Close</button>' +
+                            '</div>' +
+                        '</div>';
+                    document.body.appendChild(modal);
+                    
+                    // Add event listeners
+                    document.getElementById('embed-modal-close').addEventListener('click', function() {
+                        modal.style.display = 'none';
+                        announceToScreenReader('Embed code modal closed.');
+                    });
+                    
+                    document.getElementById('close-embed-modal').addEventListener('click', function() {
+                        modal.style.display = 'none';
+                        announceToScreenReader('Embed code modal closed.');
+                    });
+                    
+                    document.getElementById('copy-embed-code').addEventListener('click', function() {
+                        var textarea = document.getElementById('embed-code-textarea');
+                        textarea.select();
+                        textarea.setSelectionRange(0, 99999); // For mobile devices
+                        
+                        try {
+                            document.execCommand('copy');
+                            announceToScreenReader('Embed code copied to clipboard successfully.');
+                            
+                            // Temporarily change button text to show success
+                            var button = this;
+                            var originalText = button.textContent;
+                            button.textContent = 'Copied!';
+                            button.disabled = true;
+                            setTimeout(function() {
+                                button.textContent = originalText;
+                                button.disabled = false;
+                            }, 2000);
+                        } catch (err) {
+                            announceToScreenReader('Failed to copy embed code. Please copy manually.');
+                        }
+                    });
+                    
+                    // Close modal when clicking outside
+                    modal.addEventListener('click', function(e) {
+                        if (e.target === modal) {
+                            modal.style.display = 'none';
+                            announceToScreenReader('Embed code modal closed.');
+                        }
+                    });
+                    
+                    // Close modal with Escape key
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape' && modal.style.display === 'block') {
+                            modal.style.display = 'none';
+                            announceToScreenReader('Embed code modal closed.');
+                        }
+                    });
+                }
+                
+                // Set the embed code and show modal
+                document.getElementById('embed-code-textarea').value = iframeCode;
+                modal.style.display = 'block';
+                
+                // Focus on the textarea for accessibility
+                setTimeout(function() {
+                    document.getElementById('embed-code-textarea').focus();
+                }, 100);
+                
+                announceToScreenReader('Embed code modal opened. The embed code is ready to copy.');
+            }
             
             function announceToScreenReader(message) {
                 var ariaLive = document.getElementById('aria-announcements');
@@ -201,6 +412,12 @@ app_ui = ui.page_fluid(
                         "download_html",
                         "Download HTML",
                         class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        title="Copy embed code to clipboard"
                     ),
                     ui.input_action_button(
                         "help_button",
@@ -488,6 +705,58 @@ def server(input, output, session):
         modal = get_help_modal()
         ui.modal_show(modal)
         await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
+
+    # Handle embed code button click
+    @reactive.effect
+    @reactive.event(input.embed_code_button)
+    async def embed_code_button_clicked():
+        """Generate and show embed code for the current plot"""
+        await announce_to_screen_reader("Generating embed code for current plot...")
+        
+        try:
+            # Get the current figure
+            fig = current_figure.get()
+            if fig is None:
+                # Try to get the current plot from matplotlib
+                fig = plt.gcf()
+                if fig and fig.get_axes():
+                    current_figure.set(fig)
+                else:
+                    await announce_to_screen_reader("No plot available to generate embed code")
+                    ui.notification_show("No plot available to generate embed code", type="warning")
+                    return
+            
+            # Create a temporary file to generate HTML
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
+            temp_filepath = temp_file.name
+            temp_file.close()
+            
+            try:
+                # Generate HTML using maidr with UTF-8 encoding
+                save_html_utf8(fig, temp_filepath)
+                
+                # Read the generated HTML content
+                with open(temp_filepath, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                # Send the HTML content to the client to generate embed code
+                await session.send_custom_message("show_embed_modal", html_content)
+                
+                await announce_to_screen_reader("Embed code generated successfully. Modal opened with code ready to copy.")
+                
+            except Exception as e:
+                await announce_to_screen_reader(f"Error generating embed code: {str(e)}")
+                ui.notification_show(f"Error generating embed code: {str(e)}", type="error")
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_filepath)
+                except:
+                    pass
+                    
+        except Exception as e:
+            await announce_to_screen_reader(f"Error generating embed code: {str(e)}")
+            ui.notification_show(f"Error generating embed code: {str(e)}", type="error")
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -1370,8 +1639,8 @@ def server(input, output, session):
             original_encoding = os.environ.get('PYTHONIOENCODING', '')
             
             try:
-                # Use maidr.save_html to save the plot
-                maidr.save_html(fig, filepath)
+                # Use save_html_utf8 to save the plot with proper encoding
+                save_html_utf8(fig, filepath)
                 
                 # Store the file path for download
                 last_saved_file.set(filepath)
@@ -1407,7 +1676,7 @@ def server(input, output, session):
                 temp_file.close()
                 
                 try:
-                    maidr.save_html(fig, temp_filepath)
+                    save_html_utf8(fig, temp_filepath)
                     return temp_filepath
                 except Exception as e:
                     raise Exception(f"Error creating download file: {str(e)}")
