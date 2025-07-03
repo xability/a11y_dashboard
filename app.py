@@ -655,7 +655,7 @@ def server(input, output, session):
                 
                 # Send the full HTML code to client side
                 await session.send_custom_message("show_embed_modal", embed_code)
-                await announce_to_screen_reader("Embed code modal opened with div block ready to copy. Contains CSS link, JavaScript, and SVG for full MAIDR accessibility.")
+                await announce_to_screen_reader("Embed code modal opened with secure iframe ready to copy. Contains sandboxed content with full MAIDR accessibility.")
                 
             finally:
                 # Clean up temp file
@@ -684,10 +684,11 @@ def server(input, output, session):
             modal = ui.modal(
                 ui.h3("Embed Code"),
                 ui.div(
-                    ui.p("Simply copy and paste this div block into any HTML page where you want the accessible plot to appear."),
+                    ui.p("This iframe embed code contains all MAIDR accessibility features with sandbox security."),
+                    ui.p("Simply copy and paste this iframe code into any HTML page where you want the accessible plot to appear."),
                     style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"
                 ),
-                ui.p("Div block embed code (preserves full MAIDR accessibility):"),
+                ui.p("Iframe embed code (sandboxed and secure):"),
                 ui.input_text_area(
                     "embed_code_display",
                     "",
@@ -695,13 +696,13 @@ def server(input, output, session):
                     rows=15,
                     width="100%"
                 ),
-                ui.p("Copy all the div content above (Ctrl+A, then Ctrl+C) and paste it directly into the body of any HTML page where you want the accessible plot."),
+                ui.p("Copy the iframe code above (Ctrl+A, then Ctrl+C) and paste it directly into any HTML page where you want the accessible plot."),
                 footer=ui.modal_button("Close"),
                 size="l",
                 easy_close=True
             )
             ui.modal_show(modal)
-            await announce_to_screen_reader("Embed code modal opened with div block that preserves all MAIDR accessibility features. Ready to copy and paste.")
+            await announce_to_screen_reader("Embed code modal opened with secure iframe that preserves all MAIDR accessibility features. Ready to copy and paste.")
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -1172,25 +1173,51 @@ def server(input, output, session):
 
 # Function to extract embed content from full HTML
 def extract_embed_content(html_content):
-    """Extract only the inner div content for embedding (excludes DOCTYPE, html, head, body tags)"""
+    """Extract div content and wrap in iframe with sandbox for secure embedding"""
     import re
+    import html
     
     # Find the content between <body> and </body>
     body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.DOTALL | re.IGNORECASE)
     
     if body_match:
         body_content = body_match.group(1).strip()
-        return body_content
     else:
         # Fallback: try to find the main div with MAIDR content
         # Look for the div that contains the link and script
         div_match = re.search(r'(<div[^>]*>.*?<link.*?maidr.*?<script.*?</script>.*?<div.*?</div>\s*</div>)', html_content, re.DOTALL | re.IGNORECASE)
         
         if div_match:
-            return div_match.group(1).strip()
+            body_content = div_match.group(1).strip()
         else:
-            # If we can't parse it properly, return a message
+            # If we can't parse it properly, return an error message
             return "<!-- Error: Could not extract embed content from generated HTML -->"
+    
+    # Create a complete HTML document for the iframe
+    iframe_html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+{body_content}
+</body>
+</html>'''
+    
+    # Escape the HTML for use in srcdoc attribute
+    escaped_html = html.escape(iframe_html, quote=True)
+    
+    # Create iframe with sandbox attributes for security
+    # Allow scripts and same-origin for MAIDR functionality while maintaining security
+    iframe_embed = f'''<iframe 
+    srcdoc="{escaped_html}"
+    style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 4px;"
+    sandbox="allow-scripts allow-same-origin"
+    title="Accessible Interactive Plot with MAIDR">
+</iframe>'''
+    
+    return iframe_embed
 
 # Create the Shiny app
 app = App(app_ui, server)
