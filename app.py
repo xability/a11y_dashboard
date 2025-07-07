@@ -1586,8 +1586,7 @@ def server(input, output, session):
                 return ui.div(
                     ui.input_select("var_x", "Select X (categorical):", choices=[""] + categorical_cols),
                     ui.input_select("var_y", "Select Y (categorical):", choices=[""] + categorical_cols),
-                    ui.input_select("var_value", "Select numeric value (optional):", choices=["None"] + numeric_cols, selected="None"),
-                    ui.input_select("heatmap_custom_color", "Select color scale:", choices=list(color_palettes.keys()), selected="Default")
+                    ui.input_select("var_value", "Select numeric value (optional):", choices=["None"] + numeric_cols, selected="None")
                 )
         return ui.div()
 
@@ -1632,9 +1631,8 @@ def server(input, output, session):
                 var_y = input.var_y()
                 var_value = getattr(input, 'var_value', lambda: 'None')()
                 var_value = None if var_value == 'None' or var_value == '' else var_value
-                colorscale = color_palettes.get(getattr(input, 'heatmap_custom_color', lambda: 'Default')(), 'YlGnBu')
                 if var_x and var_y and var_x != '' and var_y != '' and var_x != var_y:
-                    ax = create_custom_heatmap(df, var_x, var_y, var_value, colorscale, input.theme())
+                    ax = create_custom_heatmap(df, var_x, var_y, var_value, 'YlGnBu', input.theme())
             
             if ax is not None:
                 # Check if ax is actually an axes object, not a list
