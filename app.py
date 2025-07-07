@@ -1562,11 +1562,10 @@ def server(input, output, session):
                     ui.input_select("boxplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Scatter Plot":
-                # Exclude selected X variable from Y choices
-                var_x_current = getattr(input, 'var_x', lambda: "")()
-                y_choices = [col for col in numeric_cols if col != var_x_current]
+                # Provide all numeric columns for both axes (allow same variable)
+                y_choices = numeric_cols
                 return ui.div(
-                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols, selected=var_x_current),
+                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
                     ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
                     ui.input_select("scatter_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
@@ -1576,10 +1575,10 @@ def server(input, output, session):
                     ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Line Plot":
-                var_x_current = getattr(input, 'var_x', lambda: "")()
-                y_choices = [col for col in numeric_cols if col != var_x_current]
+                # Provide all numeric columns for both axes (allow same variable)
+                y_choices = numeric_cols
                 return ui.div(
-                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols, selected=var_x_current),
+                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
                     ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
                     ui.input_select("lineplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
@@ -1616,7 +1615,7 @@ def server(input, output, session):
                 var_y = None if var_y == 'None' or var_y == "" else var_y
                 ax = create_custom_boxplot(df, input.var_x(), var_y, color, input.theme())
                 
-            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "" and input.var_x() != input.var_y():
+            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "":
                 color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
                 
@@ -1624,7 +1623,7 @@ def server(input, output, session):
                 color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_barplot(df, input.var_x(), color, input.theme())
             
-            elif plot_type == "Line Plot" and all(hasattr(input, v) for v in ['var_x','var_y']) and input.var_x() and input.var_y() and input.var_x() != input.var_y():
+            elif plot_type == "Line Plot" and all(hasattr(input, v) for v in ['var_x','var_y']) and input.var_x() and input.var_y():
                 color = color_palettes.get(getattr(input, 'lineplot_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_lineplot(df, input.var_x(), input.var_y(), color, input.theme())
             
