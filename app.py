@@ -250,8 +250,10 @@ app_ui = ui.page_fluid(
                 console.log('Download triggered for:', data.filename);
                 
                 try {
-                    // Create a blob from the HTML content
-                    var blob = new Blob([data.content], { type: 'text/html;charset=utf-8' });
+                    // Determine MIME type (default to HTML if not provided)
+                    var mimeType = data.mime_type || 'text/html;charset=utf-8';
+                    // Create a blob from the content
+                    var blob = new Blob([data.content], { type: mimeType });
                     console.log('Blob created:', blob.size, 'bytes');
                     
                     // Check if the browser supports the download attribute
@@ -301,9 +303,66 @@ app_ui = ui.page_fluid(
                     
                     announceToScreenReader('Download started: ' + data.filename);
                     
+                    // Visual alert for users
+                    try {
+                        var alertDiv = document.createElement('div');
+                        alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                        alertDiv.setAttribute('role', 'alert');
+                        alertDiv.style.position = 'fixed';
+                        alertDiv.style.top = '20px';
+                        alertDiv.style.right = '20px';
+                        alertDiv.style.zIndex = 2000;
+                        alertDiv.textContent = '✓ ' + data.filename + ' downloaded';
+
+                        var closeBtn = document.createElement('button');
+                        closeBtn.type = 'button';
+                        closeBtn.className = 'btn-close';
+                        closeBtn.setAttribute('aria-label', 'Close');
+                        closeBtn.addEventListener('click', function() {
+                            alertDiv.remove();
+                        });
+                        alertDiv.appendChild(closeBtn);
+
+                        document.body.appendChild(alertDiv);
+                        // Auto-dismiss after 4 s
+                        setTimeout(function() {
+                            try { alertDiv.classList.remove('show'); alertDiv.remove(); } catch(e) {}
+                        }, 4000);
+                    } catch(e) {
+                        console.log('Could not create visual alert', e);
+                    }
+                    
                 } catch (e) {
                     console.error('Download error:', e);
                     announceToScreenReader('Download failed: ' + e.message);
+                }
+            });
+            
+            Shiny.addCustomMessageHandler("copy_text_to_clipboard", function(text) {
+                try {
+                    navigator.clipboard.writeText(text).then(function() {
+                        announceToScreenReader('Embed code copied to clipboard');
+                        // Visual toast
+                        var toast = document.createElement('div');
+                        toast.className = 'alert alert-info alert-dismissible fade show';
+                        toast.setAttribute('role', 'alert');
+                        toast.style.position = 'fixed';
+                        toast.style.top = '20px';
+                        toast.style.right = '20px';
+                        toast.style.zIndex = 2000;
+                        toast.textContent = 'Embed code copied to clipboard';
+                        var closeBtn = document.createElement('button');
+                        closeBtn.type = 'button';
+                        closeBtn.className = 'btn-close';
+                        closeBtn.setAttribute('aria-label', 'Close');
+                        closeBtn.addEventListener('click', function() { toast.remove(); });
+                        toast.appendChild(closeBtn);
+                        document.body.appendChild(toast);
+                        setTimeout(function(){ try{toast.classList.remove('show'); toast.remove();}catch(e){} }, 4000);
+                    });
+                } catch(e) {
+                    console.error('Clipboard copy failed', e);
+                    announceToScreenReader('Failed to copy embed code');
                 }
             });
             
@@ -455,18 +514,21 @@ app_ui = ui.page_fluid(
                 # Right column for the plot (80% width)
                 ui.column(10, 
                     ui.div(
-                        ui.input_action_button("save_svg_button", "Save SVG to Downloads", 
-                                              class_="btn btn-primary"),
+                        ui.input_action_button(
+                            "download_graphics_custom",
+                            "Download Graphics",
+                            class_="btn btn-primary",
+                        ),
                         ui.input_action_button(
                             "download_html_custom",
-                            "Download HTML",
+                            "Download Multimodal Plot",
                             class_="btn btn-secondary",
                         ),
                         ui.input_action_button(
                             "embed_code_button_custom",
                             "Embed Code",
                             class_="btn btn-success",
-                            title="Get embed code for your website"
+                            aria_label="Get embed code for your website",
                         ),
                         class_="text-center mb-3",
                         style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -502,15 +564,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_histogram",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_histogram",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_histogram",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -539,15 +606,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_boxplot",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_boxplot",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_boxplot",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -577,15 +649,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_scatter",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_scatter",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_scatter",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -603,15 +680,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_barplot",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_barplot",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_barplot",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -640,15 +722,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_lineplot",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_lineplot",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_lineplot",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -670,15 +757,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_heatmap",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_heatmap",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_heatmap",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -707,15 +799,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_multiline",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_multiline",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_multiline",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -749,15 +846,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_multilayer",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_multilayer",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_multilayer",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -771,15 +873,20 @@ app_ui = ui.page_fluid(
             ui.p("Three-panel plot with line plot and bar plots"),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_multipanel",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_multipanel",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_multipanel",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -815,15 +922,20 @@ app_ui = ui.page_fluid(
             ),
             ui.div(
                 ui.input_action_button(
+                    "download_graphics_candlestick",
+                    "Download Graphics",
+                    class_="btn btn-primary",
+                ),
+                ui.input_action_button(
                     "download_html_candlestick",
-                    "Download HTML",
+                    "Download Multimodal Plot",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
                     "embed_code_button_candlestick",
                     "Embed Code",
                     class_="btn btn-success",
-                    title="Get embed code for your website"
+                    aria_label="Get embed code for your website",
                 ),
                 class_="text-center mb-3",
                 style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
@@ -1001,25 +1113,33 @@ def server(input, output, session):
             modal = ui.modal(
                 ui.h3("Embed Code"),
                 ui.div(
-                    ui.p("This iframe embed code contains all MAIDR accessibility features with sandbox security."),
-                    ui.p("Simply copy and paste this iframe code into any HTML page where you want the accessible plot to appear."),
-                    style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"
+                    ui.p("Iframe embed code (sandboxed and secure):"),
+                    ui.input_text_area(
+                        "embed_code_display",
+                        "",
+                        value=embed_code,
+                        rows=15,
+                        width="100%"
+                    ),
                 ),
-                ui.p("Iframe embed code (sandboxed and secure):"),
-                ui.input_text_area(
-                    "embed_code_display",
-                    "",
-                    value=embed_code,
-                    rows=15,
-                    width="100%"
+                footer=ui.div(
+                    ui.input_action_button("copy_embed_button", "Copy to Clipboard", class_="btn btn-primary"),
+                    ui.modal_button("Close")
                 ),
-                ui.p("Copy the iframe code above (Ctrl+A, then Ctrl+C) and paste it directly into any HTML page where you want the accessible plot."),
-                footer=ui.modal_button("Close"),
                 size="l",
                 easy_close=True
             )
             ui.modal_show(modal)
             await announce_to_screen_reader("Embed code modal opened with secure iframe that preserves all MAIDR accessibility features. Ready to copy and paste.")
+
+    # Copy-to-clipboard handler
+    @reactive.effect
+    @reactive.event(input.copy_embed_button)
+    async def copy_embed_to_clipboard():
+        code = embed_code_content.get()
+        if code:
+            await session.send_custom_message("copy_text_to_clipboard", code)
+            await announce_to_screen_reader("Embed code copied to clipboard")
 
     # Update the theme based on the selected option
     @reactive.effect
@@ -1426,8 +1546,9 @@ def server(input, output, session):
         plot_type = getattr(input, 'plot_type', lambda: None)()
         
         if df is not None and plot_type:
-            numeric_cols = [col for col in df.columns if df[col].dtype in ['int64', 'float64']]
-            categorical_cols = [col for col in df.columns if df[col].dtype == 'object']
+            # Robust dtype detection – numeric vs non-numeric
+            numeric_cols = df.select_dtypes(include='number').columns.tolist()
+            categorical_cols = df.select_dtypes(exclude='number').columns.tolist()
             
             if plot_type == "Histogram":
                 return ui.div(
@@ -1441,18 +1562,31 @@ def server(input, output, session):
                     ui.input_select("boxplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Scatter Plot":
-                # For scatter plot, filter Y choices to exclude selected X variable
-                var_x = getattr(input, 'var_x', lambda: "")()
-                y_choices = [""] + [col for col in numeric_cols if col != var_x]
+                # Provide all numeric columns for both axes (allow same variable)
+                y_choices = numeric_cols
                 return ui.div(
                     ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
-                    ui.input_select("var_y", "Select Y variable:", choices=y_choices),
+                    ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
                     ui.input_select("scatter_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Bar Plot":
                 return ui.div(
                     ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
                     ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
+                )
+            elif plot_type == "Line Plot":
+                # Provide all numeric columns for both axes (allow same variable)
+                y_choices = numeric_cols
+                return ui.div(
+                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
+                    ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
+                    ui.input_select("lineplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
+                )
+            elif plot_type == "Heatmap":
+                return ui.div(
+                    ui.input_select("var_x", "Select X (categorical):", choices=[""] + categorical_cols),
+                    ui.input_select("var_y", "Select Y (categorical):", choices=[""] + categorical_cols),
+                    ui.input_select("var_value", "Select numeric value (optional):", choices=["None"] + numeric_cols, selected="None")
                 )
         return ui.div()
 
@@ -1480,13 +1614,25 @@ def server(input, output, session):
                 var_y = None if var_y == 'None' or var_y == "" else var_y
                 ax = create_custom_boxplot(df, input.var_x(), var_y, color, input.theme())
                 
-            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "" and input.var_x() != input.var_y():
+            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "":
                 color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
                 
             elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
                 color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_barplot(df, input.var_x(), color, input.theme())
+            
+            elif plot_type == "Line Plot" and all(hasattr(input, v) for v in ['var_x','var_y']) and input.var_x() and input.var_y():
+                color = color_palettes.get(getattr(input, 'lineplot_custom_color', lambda: 'Default')(), 'skyblue')
+                ax = create_custom_lineplot(df, input.var_x(), input.var_y(), color, input.theme())
+            
+            elif plot_type == "Heatmap" and all(hasattr(input, v) for v in ['var_x','var_y']):
+                var_x = input.var_x()
+                var_y = input.var_y()
+                var_value = getattr(input, 'var_value', lambda: 'None')()
+                var_value = None if var_value == 'None' or var_value == '' else var_value
+                if var_x and var_y and var_x != '' and var_y != '' and var_x != var_y:
+                    ax = create_custom_heatmap(df, var_x, var_y, var_value, 'YlGnBu', input.theme())
             
             if ax is not None:
                 # Check if ax is actually an axes object, not a list
@@ -1501,33 +1647,94 @@ def server(input, output, session):
             print(f"Error creating custom plot: {e}")
             return None
 
-    # SVG save button handler
-    @reactive.effect
-    @reactive.event(input.save_svg_button)
-    async def save_svg_to_downloads():
-        """Save current plot as SVG to Downloads folder"""
-        fig = current_figure.get()
-        
-        if fig is None:
-            await announce_to_screen_reader("No plot available to save")
-            return
-        
+    # Generic SVG download handler and per-tab triggers
+    async def trigger_svg_download(plot_type_suffix):
+        """Generate SVG in-memory and send to browser for download."""
         try:
-            plot_type = getattr(input, 'plot_type', lambda: 'plot')()
-            filename = f"{plot_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.svg"
-            
-            downloads_folder = str(Path.home() / "Downloads")
-            if not os.path.exists(downloads_folder):
-                downloads_folder = os.getcwd()
-            filepath = os.path.join(downloads_folder, filename)
+            fig = current_figure.get()
+            if fig is None:
+                fig = plt.gcf()
+            if not fig or not fig.get_axes():
+                await announce_to_screen_reader("No plot available to download")
+                return
 
-            fig.savefig(filepath, format='svg', bbox_inches='tight')
-            await announce_to_screen_reader(f"SVG file saved successfully as {filename}")
-            
+            import io, codecs
+            buffer = io.StringIO()
+            fig.savefig(buffer, format='svg', bbox_inches='tight')
+            svg_content = buffer.getvalue()
+            buffer.close()
+
+            filename = f"accessible_plot_{plot_type_suffix}_{uuid.uuid4().hex[:8]}.svg"
+
+            # Send to browser
+            await session.send_custom_message("download_file", {
+                "content": svg_content,
+                "filename": filename,
+                "mime_type": "image/svg+xml;charset=utf-8",
+            })
+
+            await announce_to_screen_reader(f"Download initiated for {filename}")
+
         except Exception as e:
-            await announce_to_screen_reader(f"Error saving SVG file: {str(e)}")
-            print(f"SVG save error: {e}")
-    
+            await announce_to_screen_reader(f"Error preparing graphics file: {str(e)}")
+            print(f"SVG creation error: {e}")
+
+    # Download Graphics button events for all tabs
+    @reactive.effect
+    @reactive.event(input.download_graphics_custom)
+    async def download_graphics_custom_clicked():
+        await trigger_svg_download("custom")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_histogram)
+    async def download_graphics_histogram_clicked():
+        await trigger_svg_download("histogram")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_boxplot)
+    async def download_graphics_boxplot_clicked():
+        await trigger_svg_download("boxplot")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_scatter)
+    async def download_graphics_scatter_clicked():
+        await trigger_svg_download("scatter")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_barplot)
+    async def download_graphics_barplot_clicked():
+        await trigger_svg_download("barplot")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_lineplot)
+    async def download_graphics_lineplot_clicked():
+        await trigger_svg_download("lineplot")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_heatmap)
+    async def download_graphics_heatmap_clicked():
+        await trigger_svg_download("heatmap")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_multiline)
+    async def download_graphics_multiline_clicked():
+        await trigger_svg_download("multiline")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_multilayer)
+    async def download_graphics_multilayer_clicked():
+        await trigger_svg_download("multilayer")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_multipanel)
+    async def download_graphics_multipanel_clicked():
+        await trigger_svg_download("multipanel")
+
+    @reactive.effect
+    @reactive.event(input.download_graphics_candlestick)
+    async def download_graphics_candlestick_clicked():
+        await trigger_svg_download("candlestick")
+
     # Add reactive effects to announce changes to screen readers
     @reactive.effect
     async def announce_plot_type_change():
