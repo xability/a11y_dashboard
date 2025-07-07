@@ -338,6 +338,34 @@ app_ui = ui.page_fluid(
                 }
             });
             
+            Shiny.addCustomMessageHandler("copy_text_to_clipboard", function(text) {
+                try {
+                    navigator.clipboard.writeText(text).then(function() {
+                        announceToScreenReader('Embed code copied to clipboard');
+                        // Visual toast
+                        var toast = document.createElement('div');
+                        toast.className = 'alert alert-info alert-dismissible fade show';
+                        toast.setAttribute('role', 'alert');
+                        toast.style.position = 'fixed';
+                        toast.style.top = '20px';
+                        toast.style.right = '20px';
+                        toast.style.zIndex = 2000;
+                        toast.textContent = 'Embed code copied to clipboard';
+                        var closeBtn = document.createElement('button');
+                        closeBtn.type = 'button';
+                        closeBtn.className = 'btn-close';
+                        closeBtn.setAttribute('aria-label', 'Close');
+                        closeBtn.addEventListener('click', function() { toast.remove(); });
+                        toast.appendChild(closeBtn);
+                        document.body.appendChild(toast);
+                        setTimeout(function(){ try{toast.classList.remove('show'); toast.remove();}catch(e){} }, 4000);
+                    });
+                } catch(e) {
+                    console.error('Clipboard copy failed', e);
+                    announceToScreenReader('Failed to copy embed code');
+                }
+            });
+            
             Shiny.addCustomMessageHandler("show_embed_modal", function(embedCode) {
                 // Trigger showing the embed modal in Shiny
                 Shiny.setInputValue("embed_code_content", embedCode);
@@ -1085,25 +1113,33 @@ def server(input, output, session):
             modal = ui.modal(
                 ui.h3("Embed Code"),
                 ui.div(
-                    ui.p("This iframe embed code contains all MAIDR accessibility features with sandbox security."),
-                    ui.p("Simply copy and paste this iframe code into any HTML page where you want the accessible plot to appear."),
-                    style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"
+                    ui.p("Iframe embed code (sandboxed and secure):"),
+                    ui.input_text_area(
+                        "embed_code_display",
+                        "",
+                        value=embed_code,
+                        rows=15,
+                        width="100%"
+                    ),
                 ),
-                ui.p("Iframe embed code (sandboxed and secure):"),
-                ui.input_text_area(
-                    "embed_code_display",
-                    "",
-                    value=embed_code,
-                    rows=15,
-                    width="100%"
+                footer=ui.div(
+                    ui.input_action_button("copy_embed_button", "Copy to Clipboard", class_="btn btn-primary"),
+                    ui.modal_button("Close")
                 ),
-                ui.p("Copy the iframe code above (Ctrl+A, then Ctrl+C) and paste it directly into any HTML page where you want the accessible plot."),
-                footer=ui.modal_button("Close"),
                 size="l",
                 easy_close=True
             )
             ui.modal_show(modal)
             await announce_to_screen_reader("Embed code modal opened with secure iframe that preserves all MAIDR accessibility features. Ready to copy and paste.")
+
+    # Copy-to-clipboard handler
+    @reactive.effect
+    @reactive.event(input.copy_embed_button)
+    async def copy_embed_to_clipboard():
+        code = embed_code_content.get()
+        if code:
+            await session.send_custom_message("copy_text_to_clipboard", code)
+            await announce_to_screen_reader("Embed code copied to clipboard")
 
     # Update the theme based on the selected option
     @reactive.effect
