@@ -11,6 +11,8 @@ from maidr.widget.shiny import render_maidr
 import maidr
 from shiny import App, reactive, render, ui
 from shiny.types import FileInfo
+import datetime
+import re
 
 # Import plot modules
 from plots.utils import color_palettes
@@ -516,12 +518,12 @@ app_ui = ui.page_fluid(
                     ui.div(
                         ui.input_action_button(
                             "download_graphics_custom",
-                            "Download Graphics",
+                            "Download Graph in *.svg",
                             class_="btn btn-primary",
                         ),
                         ui.input_action_button(
                             "download_html_custom",
-                            "Download Multimodal Plot",
+                            "Download Multimodal Plot in *.html",
                             class_="btn btn-secondary",
                         ),
                         ui.input_action_button(
@@ -565,12 +567,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_histogram",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_histogram",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -607,12 +609,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_boxplot",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_boxplot",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -650,12 +652,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_scatter",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_scatter",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -681,12 +683,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_barplot",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_barplot",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -723,12 +725,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_lineplot",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_lineplot",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -758,12 +760,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_heatmap",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_heatmap",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -800,12 +802,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_multiline",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_multiline",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -847,12 +849,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_multilayer",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_multilayer",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -874,12 +876,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_multipanel",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_multipanel",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -923,12 +925,12 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_action_button(
                     "download_graphics_candlestick",
-                    "Download Graphics",
+                    "Download Graph in *.svg",
                     class_="btn btn-primary",
                 ),
                 ui.input_action_button(
                     "download_html_candlestick",
-                    "Download Multimodal Plot",
+                    "Download Multimodal Plot in *.html",
                     class_="btn btn-secondary",
                 ),
                 ui.input_action_button(
@@ -1173,8 +1175,17 @@ def server(input, output, session):
                 with open(temp_filepath, 'r', encoding='utf-8') as f:
                     html_content = f.read()
                 
-                # Generate filename
-                filename = f"accessible_plot_{plot_type_suffix}_{uuid.uuid4().hex[:8]}.html"
+                # Generate filename using new scheme: titleofplot_plottype_timestamp
+                plot_title = "plot"
+                try:
+                    if fig and fig.get_axes():
+                        title_text = fig.get_axes()[0].get_title()
+                        if title_text:
+                            plot_title = re.sub(r"\W+", "_", title_text.strip()).strip("_")
+                except Exception:
+                    pass
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{plot_title}_{plot_type_suffix}_{timestamp}.html"
                 
                 # Send to JavaScript for download
                 await session.send_custom_message("download_file", {
@@ -1199,7 +1210,13 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.download_html_custom)
     async def download_html_custom_clicked():
-        await trigger_html_download("custom")
+        # Include the selected plot type in the suffix for custom downloads
+        plot_type = getattr(input, 'plot_type', lambda: None)()
+        if plot_type:
+            suffix = "custom_" + re.sub(r"\W+", "_", plot_type.strip().lower())
+        else:
+            suffix = "custom"
+        await trigger_html_download(suffix)
 
     @reactive.effect
     @reactive.event(input.download_html_histogram)
@@ -1664,7 +1681,17 @@ def server(input, output, session):
             svg_content = buffer.getvalue()
             buffer.close()
 
-            filename = f"accessible_plot_{plot_type_suffix}_{uuid.uuid4().hex[:8]}.svg"
+            # Generate filename using new scheme: titleofplot_plottype_timestamp
+            plot_title = "plot"
+            try:
+                if fig and fig.get_axes():
+                    title_text = fig.get_axes()[0].get_title()
+                    if title_text:
+                        plot_title = re.sub(r"\W+", "_", title_text.strip()).strip("_")
+            except Exception:
+                pass
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{plot_title}_{plot_type_suffix}_{timestamp}.svg"
 
             # Send to browser
             await session.send_custom_message("download_file", {
@@ -1683,7 +1710,12 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.download_graphics_custom)
     async def download_graphics_custom_clicked():
-        await trigger_svg_download("custom")
+        plot_type = getattr(input, 'plot_type', lambda: None)()
+        if plot_type:
+            suffix = "custom_" + re.sub(r"\W+", "_", plot_type.strip().lower())
+        else:
+            suffix = "custom"
+        await trigger_svg_download(suffix)
 
     @reactive.effect
     @reactive.event(input.download_graphics_histogram)
