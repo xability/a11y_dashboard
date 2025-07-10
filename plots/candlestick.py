@@ -5,9 +5,11 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from plots.utils import set_plot_theme, color_palettes
 
-# Try to import mplfinance, if not available use a fallback
+# Try to import mplfinance. If it is available we will leverage its high-level API
+# to draw the candlestick together with moving-average lines and a volume subplot.
 try:
-    from mplfinance.original_flavor import candlestick_ohlc
+    import mplfinance as mpf
+    from mplfinance.original_flavor import candlestick_ohlc  # still used for the low-level fallback
     MPLFINANCE_AVAILABLE = True
 except ImportError:
     MPLFINANCE_AVAILABLE = False
@@ -175,46 +177,87 @@ def create_candlestick_plot(
     # Prepare OHLC data
     ohlc = df[["Date_num", "Open", "High", "Low", "Close"]].values
     
-    # Create figure and axes
+    #-----------------------------------------------------------------------------
+    # If mplfinance is present use its high-level API to include
+    #  • Moving-average (3, 6, 9)
+    #  • A synced volume subplot (lower panel)
+    #-----------------------------------------------------------------------------
+    if MPLFINANCE_AVAILABLE:
+        # mplfinance expects DateTimeIndex
+        mpf_df = df.set_index("Date")[["Open", "High", "Low", "Close", "Volume"]]
+
+        # Choose an mpf style consistent with the dashboard theme
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+
+        # Create the plot with volume and moving averages. We ask for figure so we
+        # can integrate with MAIDR and the rest of the dashboard.
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(3, 6, 9),
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title=f"{company} Stock Price with Volume",
+        )
+
+        # Ensure overall theme matches dashboard selection
+        # Apply to the primary price axis and figure background; volume axis will
+        # inherit the facecolor from the mplfinance style which already obeys
+        # the chosen theme.
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+
+        return primary_ax  # MAIDR will still capture the full figure via plt.gcf()
+
+    #-----------------------------------------------------------------------------
+    # Fallback: mplfinance is NOT available – draw manually as before
+    #-----------------------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(12, 6))
     set_plot_theme(fig, ax, theme)
-    
-    # Plot candlesticks
-    if MPLFINANCE_AVAILABLE:
-        # mplfinance uses width in data units (days)
-        candlestick_ohlc(ax, ohlc, width=width, colorup=colorup, colordown=colordown, alpha=0.8)
+
+    # For fallback, adjust width based on timeframe for better visibility
+    fallback_width = width
+    if timeframe == "Yearly":
+        fallback_width = width * 3  # Make it even wider for fallback rendering
+    elif timeframe == "Monthly":
+        fallback_width = width * 2
+
+    # Try using candlestick_ohlc from original_flavor if it exists
+    if 'candlestick_ohlc' in globals():
+        candlestick_ohlc(ax, ohlc, width=fallback_width, colorup=colorup, colordown=colordown, alpha=0.8)
     else:
-        # For fallback, adjust width based on timeframe for better visibility
-        fallback_width = width
-        if timeframe == "Yearly":
-            fallback_width = width * 3  # Make it even wider for fallback rendering
-        elif timeframe == "Monthly":
-            fallback_width = width * 2
         draw_candlestick_fallback(ax, ohlc, width=fallback_width, colorup=colorup, colordown=colordown)
-    
-    # Format the plot based on timeframe
+
+    # Formatting
     ax.xaxis_date()
-    
     if timeframe == "Daily":
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
         ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right")
     elif timeframe == "Monthly":
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
         ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right")
     elif timeframe == "Yearly":
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
         ax.xaxis.set_major_locator(mdates.YearLocator())
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center')
-    
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha="center")
+
     ax.grid(True, linestyle="--", alpha=0.6)
-    ax.set_title(f"{company} Stock Price - Candlestick Chart", fontsize=14, fontweight='bold')
+    ax.set_title(f"{company} Stock Price - Candlestick Chart", fontsize=14, fontweight="bold")
     ax.set_xlabel("Date", fontsize=12)
     ax.set_ylabel("Price ($)", fontsize=12)
-    
+
     plt.tight_layout()
-    
+
     return ax
 
 def aggregate_data_by_timeframe(data: Dict[str, List], timeframe: str) -> Dict[str, List]:
