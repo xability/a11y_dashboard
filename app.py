@@ -652,6 +652,33 @@ app_ui = ui.page_fluid(
                     }
                 });
             });
+
+            // Generic visual alert handler (type: 'success' | 'info' | 'warning' | 'danger')
+            Shiny.addCustomMessageHandler("show_alert", function(data) {
+                try {
+                    var alertDiv = document.createElement('div');
+                    var alertType = data.type || 'info';
+                    alertDiv.className = 'alert alert-' + alertType + ' alert-dismissible fade show';
+                    alertDiv.setAttribute('role', 'alert');
+                    alertDiv.style.position = 'fixed';
+                    alertDiv.style.top = '20px';
+                    alertDiv.style.right = '20px';
+                    alertDiv.style.zIndex = 2000;
+                    alertDiv.textContent = data.message || 'Notification';
+
+                    var closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('aria-label', 'Close');
+                    closeBtn.addEventListener('click', function() { alertDiv.remove(); });
+                    alertDiv.appendChild(closeBtn);
+
+                    document.body.appendChild(alertDiv);
+                    setTimeout(function(){ try{alertDiv.classList.remove('show'); alertDiv.remove();}catch(e){} }, 4000);
+                } catch(e) {
+                    console.error('show_alert handler failed', e);
+                }
+            });
         """
         ),
     ),
@@ -1236,6 +1263,7 @@ def server(input, output, session):
             
             if not fig or not fig.get_axes():
                 await announce_to_screen_reader("No plot available to generate embed code")
+                await session.send_custom_message("show_alert", {"type":"warning", "message":"No plot available. Please generate a plot before creating embed code."})
                 return
             
             # Generate HTML content using the same logic as download - this works!
@@ -1392,6 +1420,7 @@ def server(input, output, session):
             
             if not fig or not fig.get_axes():
                 await announce_to_screen_reader("No plot available to download")
+                await session.send_custom_message("show_alert", {"type":"warning", "message":"No plot available. Please generate a plot before creating embed code."})
                 return
             
             # Create temporary file
@@ -1906,6 +1935,7 @@ def server(input, output, session):
                 fig = plt.gcf()
             if not fig or not fig.get_axes():
                 await announce_to_screen_reader("No plot available to download")
+                await session.send_custom_message("show_alert", {"type":"warning", "message":"No plot available. Please generate a plot before creating embed code."})
                 return
 
             import io, codecs
