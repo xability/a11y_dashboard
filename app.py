@@ -366,6 +366,13 @@ app_ui = ui.page_fluid(
                 color: #ffffff !important;
             }
 
+            /* Any grid columns/rows inside main content */
+            body.dark-theme .main-content .row,
+            body.dark-theme .main-content [class^="col"],
+            body.dark-theme .main-content [class*=" col"] {
+                background-color: #000000 !important;
+            }
+
             /* Ensure plot containers maintain dark backdrop */
             body.dark-theme .about-section,
             body.dark-theme .main-content div[id^="create_"],
@@ -375,8 +382,27 @@ app_ui = ui.page_fluid(
                 background-color: #000000 !important;
             }
 
-            /* Ensure main content/plot columns don’t show white */
+            /* Ensure main content/plot columns don't show white */
             body.dark-theme .main-content {
+                background-color: #000000 !important;
+            }
+
+            /* Containers that may still be white */
+            body.dark-theme .container,
+            body.dark-theme .container-fluid,
+            body.dark-theme .nav-panel,
+            body.dark-theme .nav-panel > div {
+                background-color: #000000 !important;
+            }
+
+            /* Shiny tab content wrappers */
+            body.dark-theme .tab-content,
+            body.dark-theme .tab-content .tab-pane {
+                background-color: #000000 !important;
+            }
+
+            /* Fallback: any element inside main-content still white gets forced to black */
+            body.dark-theme .main-content div[style*="background"] {
                 background-color: #000000 !important;
             }
         """
@@ -1953,11 +1979,6 @@ def server(input, output, session):
     @reactive.event(input.download_graphics_heatmap)
     async def download_graphics_heatmap_clicked():
         await trigger_svg_download("heatmap")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_multiline)
-    async def download_graphics_multiline_clicked():
-        await trigger_svg_download("multiline")
 
     @reactive.effect
     @reactive.event(input.download_graphics_multilayer)
