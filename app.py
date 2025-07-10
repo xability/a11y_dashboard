@@ -179,6 +179,74 @@ app_ui = ui.page_fluid(
                 height: 1px;
                 overflow: hidden;
             }
+            /* Sticky footer styles */
+            body {
+                min-height: 100vh;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            .main-content {
+                flex: 1 0 auto;
+                min-height: calc(100vh - 60px);  /* Subtract footer height */
+                padding-bottom: 2rem;  /* Add some padding before footer */
+            }
+            /* Enhanced footer */
+            footer.app-footer {
+                flex-shrink: 0;
+                width: 100%;
+                background-color: #f8f9fa;
+                padding: 1.25rem 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+                font-size: 0.9rem;
+                border-top: 1px solid #dee2e6;
+            }
+            body.dark-theme footer.app-footer {
+                background-color: #000000;
+                color: #ffffff;
+                border-top: 1px solid #444;
+            }
+
+            /* About section – logo on the left, text on the right */
+            .about-section {
+                max-width: 1000px;
+                margin: 0 auto;
+                display: flex;
+                flex-direction: row;
+                gap: 2rem;
+                align-items: flex-start;
+            }
+            .about-logo {
+                max-width: 220px;
+                height: auto;
+                flex-shrink: 0;
+            }
+            .about-text {
+                flex: 1;
+                text-align: left;
+            }
+            .about-text h2 {
+                font-weight: 700;
+            }
+            .about-text p {
+                font-size: 1.05rem;
+                line-height: 1.6;
+            }
+            .about-text ul {
+                list-style-type: disc;
+                margin-left: 1.2rem;
+            }
+            .about-text a {
+                color: #0d6efd;
+            }
+            .about-paragraph {
+                font-size: 1.05rem;
+                line-height: 1.6;
+            }
             .embed-modal {
                 position: fixed;
                 top: 0;
@@ -226,6 +294,91 @@ app_ui = ui.page_fluid(
             .embed-modal-footer button {
                 margin-left: 10px;
             }
+            /* Dark mode refinements */
+            body.dark-theme {
+                background-color: #000000; /* true black */
+                color: #ffffff;
+            }
+            body.dark-theme footer {
+                background-color: #000000;
+                color: #ffffff;
+            }
+            /* Improve nav visibility in dark theme */
+            body.dark-theme .nav-tabs .nav-link {
+                color: #ffffff;
+            }
+            body.dark-theme .nav-tabs .nav-link.active {
+                color: #0d6efd; /* Bootstrap primary for active tab */
+            }
+
+            /* Dark theme enhancements for inputs and tables */
+            body.dark-theme input[type="file"],
+            body.dark-theme .btn, /* Buttons inside dark theme */
+            body.dark-theme select,
+            body.dark-theme option {
+                color: #ffffff;
+                background-color: #333333;
+            }
+
+            body.dark-theme table {
+                background-color: #000000 !important;
+                color: #ffffff !important;
+            }
+            body.dark-theme table th {
+                background-color: #111111 !important;
+                color: #ffffff !important;
+            }
+            body.dark-theme table td {
+                border-color: #444444 !important;
+                background-color: #000000 !important;
+            }
+
+            /* Ensure all table text inherits white */
+            body.dark-theme table, 
+            body.dark-theme table * {
+                color: #ffffff !important;
+            }
+
+            /* Plot output divs */
+            body.dark-theme .shiny-html-output,
+            body.dark-theme .shiny-bound-output {
+                background-color: #000000 !important;
+            }
+
+            /* Settings dropdown / nav menu styles in dark mode */
+            body.dark-theme .dropdown-menu {
+                background-color: #000000 !important;
+                color: #ffffff !important;
+                border: 1px solid #444444 !important;
+            }
+            body.dark-theme .dropdown-menu .dropdown-item {
+                color: #ffffff !important;
+            }
+            body.dark-theme .dropdown-menu .dropdown-item:hover,
+            body.dark-theme .dropdown-menu .dropdown-item.active,
+            body.dark-theme .dropdown-menu .dropdown-item:focus {
+                background-color: #222222 !important;
+                color: #ffffff !important;
+            }
+            /* Tab panel content under dropdown */
+            body.dark-theme .tab-pane {
+                background-color: #000000 !important;
+                color: #ffffff !important;
+            }
+
+            /* Ensure plot containers maintain dark backdrop */
+            body.dark-theme .about-section,
+            body.dark-theme .main-content div[id^="create_"],
+            body.dark-theme .main-content div[id$="_output"],
+            body.dark-theme .main-content .maidr-root,
+            body.dark-theme .main-content .maidr-container {
+                background-color: #000000 !important;
+            }
+
+            /* Ensure main content/plot columns don’t show white */
+            body.dark-theme .main-content {
+                background-color: #000000 !important;
+            }
         """
         ),
         ui.tags.script(
@@ -234,6 +387,11 @@ app_ui = ui.page_fluid(
                 document.body.classList.toggle("dark-theme", theme === "Dark");
                 document.body.classList.toggle("light-theme", theme === "Light");
                 
+                // Swap logo based on theme
+                var logo = document.getElementById('maidr_logo');
+                if (logo) {
+                    logo.src = (theme === "Dark") ? "img/dark.png" : "img/light.jpg";
+                }
                 // Announce theme change
                 var announcement = "Theme changed to " + theme + " mode";
                 announceToScreenReader(announcement);
@@ -478,473 +636,521 @@ app_ui = ui.page_fluid(
         **{"aria-live": "polite", "aria-atomic": "true"},
         class_="sr-only"
     ),
-    ui.navset_tab(
-        ui.nav_menu(
-            "Settings",
-            ui.nav_control(
-                ui.input_select(
-                    "theme", 
-                    "Theme:", 
-                    choices=["Light", "Dark"], 
-                    selected="Light"
-                )
-            ),
-            ui.nav_control(
+    # (Removed separate header logo – now logo sits inside navbar)
+    ui.div(
+        ui.navset_tab(
+            # Logo acts as About tab and appears first in the navbar
+            ui.nav_panel(
+                ui.tags.img(src="img/light.jpg", id="maidr_logo", alt="MAIDR Logo", style="height:30px;"),
                 ui.div(
-                    ui.input_action_button(
-                        "help_button",
-                        "📚 Help (h)",
-                        class_="btn btn-info",
-                        title="Open help menu - keyboard shortcut: press 'h'"
+                    ui.tags.img(src="img/lab_logo.jpg", alt="(x)Ability Design Lab Logo", class_="about-logo"),
+                    ui.div(
+                        ui.h2("About MAIDR & (x)Ability Design Lab", class_="mb-3 fw-bold"),
+                        ui.p(
+                            "MAIDR (Multimodal Accessible Interactive Data Representation) is an open, research-driven platform developed by the ",
+                            ui.tags.a("(x)Ability Design Lab", href="https://xabilitylab.ischool.illinois.edu/", target="_blank"),
+                            " at the University of Illinois Urbana–Champaign. Grounded in human-computer interaction and accessibility scholarship, MAIDR operationalizes the vision of \"data insights for all\" by translating traditional charts into synchronized visual, tactile (braille), textual, sonic, and conversational artifacts.",
+                            class_="about-paragraph"
+                        ),
+                        ui.tags.ul(
+                            ui.tags.li("Synchronized multimodal output ensuring blind and sighted analysts share a single, canonical representation."),
+                            ui.tags.li("One-line integration with Matplotlib / Seaborn through the \"maidr.show()\" helper."),
+                            ui.tags.li("Designed for reproducible research, Jupyter notebooks, Streamlit dashboards, and Quarto publications."),
+                            ui.tags.li("Extensible architecture to accommodate future visualization types and assistive modalities."),
+                            class_="mb-3"
+                        ),
+                        ui.p(
+                            "The full TypeScript engine and accompanying design guidelines are openly available in our ",
+                            ui.tags.a("maidr repository", href="https://github.com/xability/maidr", target="_blank"),
+                            ". Python bindings and examples are maintained in the ",
+                            ui.tags.a("py-maidr repo", href="https://github.com/xability/py-maidr", target="_blank"),
+                            ". We welcome issues, pull requests, and scholarly collaborations.",
+                            class_="about-paragraph"
+                        ),
+                        class_="about-text"
                     ),
-                    style="display: flex; gap: 10px; margin-top: 10px;"
+                    class_="about-section my-4"
                 )
             ),
-        ),
-        # Fifth tab: Practice tab with file upload, data types, and custom plot creation
-        ui.nav_panel(
-            "Create your own Custom Plot",
-            ui.row(
-                # Left column for file upload, table, and conditional dropdowns (40% width)
-                ui.column(
-                    2,
-                    ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
-                    ui.output_table("data_types"),
-                    ui.output_ui("plot_options"),  # Conditionally render dropdowns
-                    ui.output_ui("variable_input"),  # Variable input for specific plot
+            ui.nav_menu(
+                "Settings",
+                ui.nav_control(
+                    ui.input_select(
+                        "theme", 
+                        "Theme:", 
+                        choices=["Light", "Dark"], 
+                        selected="Light"
+                    )
                 ),
-                # Right column for the plot (80% width)
-                ui.column(10, 
+                ui.nav_control(
                     ui.div(
                         ui.input_action_button(
-                            "download_graphics_custom",
-                            "Download Graph in *.svg",
-                            class_="btn btn-primary",
+                            "help_button",
+                            "📚 Help (h)",
+                            class_="btn btn-info",
+                            title="Open help menu - keyboard shortcut: press 'h'"
                         ),
-                        ui.input_action_button(
-                            "download_html_custom",
-                            "Download Multimodal Plot in *.html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_custom",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.div(
-                        ui.output_ui("create_custom_plot"),
-                        style="width: 100%; max-width: 800px;"
+                        style="display: flex; gap: 10px; margin-top: 10px;"
                     )
                 ),
             ),
+            # Fifth tab: Practice tab with file upload, data types, and custom plot creation
+            ui.nav_panel(
+                "Create your own Custom Plot",
+                ui.row(
+                    # Left column for file upload, table, and conditional dropdowns (40% width)
+                    ui.column(
+                        2,
+                        ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
+                        ui.output_table("data_types"),
+                        ui.output_ui("plot_options"),  # Conditionally render dropdowns
+                        ui.output_ui("variable_input"),  # Variable input for specific plot
+                    ),
+                    # Right column for the plot (80% width)
+                    ui.column(10, 
+                        ui.div(
+                            ui.input_action_button(
+                                "download_graphics_custom",
+                                "Download Graph in .svg",
+                                class_="btn btn-primary",
+                            ),
+                            ui.input_action_button(
+                                "download_html_custom",
+                                "Download Multimodal Plot in .html",
+                                class_="btn btn-secondary",
+                            ),
+                            ui.input_action_button(
+                                "embed_code_button_custom",
+                                "Embed Code",
+                                class_="btn btn-success",
+                                aria_label="Get embed code for your website",
+                            ),
+                            class_="text-center mb-3",
+                            style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                        ),
+                        ui.div(
+                            ui.output_ui("create_custom_plot"),
+                            style="width: 100%; max-width: 800px;"
+                        )
+                    ),
+                ),
+            ),
+            # First tab: Histogram with dropdowns and plot
+            ui.nav_panel(
+                "Histogram",
+                ui.input_select(
+                    "distribution_type",
+                    "Select histogram distribution type:",
+                    choices=[
+                        "Normal Distribution",
+                        "Positively Skewed",
+                        "Negatively Skewed",
+                        "Unimodal Distribution",
+                        "Bimodal Distribution",
+                        "Multimodal Distribution",
+                    ],
+                    selected="Normal Distribution",
+                ),
+                ui.input_select(
+                    "hist_color",
+                    "Select histogram color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_histogram",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_histogram",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_histogram",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_histogram_output"),
+            ),
+            # Second tab: Box Plot with a single variable for Tutorial
+            ui.nav_panel(
+                "Box Plot",
+                ui.input_select(
+                    "boxplot_type",
+                    "Select box plot type:",
+                    choices=[
+                        "Positively Skewed with Outliers",
+                        "Negatively Skewed with Outliers",
+                        "Symmetric with Outliers",
+                        "Symmetric without Outliers",
+                    ],
+                    selected="Positively Skewed with Outliers",
+                ),
+                ui.input_select(
+                    "boxplot_color",
+                    "Select box plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_boxplot",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_boxplot",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_boxplot",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_boxplot_output"),
+            ),
+            # Third tab: Scatter Plot with dropdowns and plot
+            ui.nav_panel(
+                "Scatter Plot",
+                ui.input_select(
+                    "scatterplot_type",
+                    "Select scatter plot type:",
+                    choices=[
+                        "No Correlation",
+                        "Weak Positive Correlation",
+                        "Strong Positive Correlation",
+                        "Weak Negative Correlation",
+                        "Strong Negative Correlation",
+                    ],
+                    selected="No Correlation",
+                ),
+                ui.input_select(
+                    "scatter_color",
+                    "Select scatter plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_scatter",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_scatter",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_scatter",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_scatterplot_output"),
+            ),
+            # Fourth tab: Bar Plot with dropdowns and plot
+            ui.nav_panel(
+                "Bar Plot",
+                ui.input_select(
+                    "barplot_color",
+                    "Select bar plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_barplot",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_barplot",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_barplot",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_barplot_output"),
+            ),
+            # New tab: Line Plot
+            ui.nav_panel(
+                "Line Plot",
+                ui.input_select(
+                    "lineplot_type",
+                    "Select line plot type:",
+                    choices=[
+                        "Linear Trend",
+                        "Exponential Growth",
+                        "Sinusoidal Pattern",
+                        "Random Walk",
+                    ],
+                    selected="Linear Trend",
+                ),
+                ui.input_select(
+                    "lineplot_color",
+                    "Select line plot color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_lineplot",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_lineplot",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_lineplot",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_lineplot_output"),
+            ),
+            # New tab: Heatmap
+            ui.nav_panel(
+                "Heatmap",
+                ui.input_select(
+                    "heatmap_type",
+                    "Select heatmap type:",
+                    choices=[
+                        "Random",
+                        "Correlated",
+                        "Checkerboard",
+                    ],
+                    selected="Random",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_heatmap",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_heatmap",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_heatmap",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_heatmap_output"),
+            ),
+            # New tab: Multiline Plot
+            ui.nav_panel(
+                "Multiline Plot",
+                ui.input_select(
+                    "multiline_type",
+                    "Select multiline plot type:",
+                    choices=[
+                        "Simple Trends",
+                        "Seasonal Patterns",
+                        "Growth Comparison",
+                        "Random Series",
+                    ],
+                    selected="Simple Trends",
+                ),
+                ui.input_select(
+                    "multiline_color",
+                    "Select color palette:",
+                    choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_multiline",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_multiline",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_multiline",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_multiline_plot_output"),
+            ),
+            # New tab: Multilayer Plot
+            ui.nav_panel(
+                "Multilayer Plot",
+                ui.input_select(
+                    "multilayer_background_type",
+                    "Select background plot type:",
+                    choices=[
+                        "Bar Plot",
+                        "Histogram",
+                        "Scatter Plot"
+                    ],
+                    selected="Bar Plot",
+                ),
+                ui.input_select(
+                    "multilayer_background_color",
+                    "Select background color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.input_select(
+                    "multilayer_line_color",
+                    "Select line color:",
+                    choices=list(color_palettes.keys()),
+                    selected="Default",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_multilayer",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_multilayer",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_multilayer",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_multilayer_plot_output"),
+            ),
+            
+            # New tab: Multipanel Plot
+            ui.nav_panel(
+                "Multipanel Plot",
+                ui.p("Three-panel plot with line plot and bar plots"),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_multipanel",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_multipanel",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_multipanel",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_multipanel_plot_output"),
+            ),
+            
+            # New tab: Candlestick Chart
+            ui.nav_panel(
+                "Candlestick Chart",
+                ui.input_select(
+                    "candlestick_company",
+                    "Select company:",
+                    choices=[
+                        "Tesla",
+                        "Apple", 
+                        "NVIDIA",
+                        "Microsoft",
+                        "Google",
+                        "Amazon",
+                    ],
+                    selected="Tesla",
+                ),
+                ui.input_select(
+                    "candlestick_timeframe",
+                    "Select timeframe:",
+                    choices=[
+                        "Daily",
+                        "Monthly",
+                        "Yearly",
+                    ],
+                    selected="Daily",
+                ),
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_candlestick",
+                        "Download Graph in .svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_candlestick",
+                        "Download Multimodal Plot in .html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_candlestick",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
+                ),
+                ui.output_ui("create_candlestick_output"),
+            ),
+            
+            # (Removed textual About tab – logo tab now serves this purpose)
         ),
-        # First tab: Histogram with dropdowns and plot
-        ui.nav_panel(
-            "Histogram",
-            ui.input_select(
-                "distribution_type",
-                "Select histogram distribution type:",
-                choices=[
-                    "Normal Distribution",
-                    "Positively Skewed",
-                    "Negatively Skewed",
-                    "Unimodal Distribution",
-                    "Bimodal Distribution",
-                    "Multimodal Distribution",
-                ],
-                selected="Normal Distribution",
-            ),
-            ui.input_select(
-                "hist_color",
-                "Select histogram color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_histogram",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_histogram",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_histogram",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_histogram_output"),
+        class_="main-content",
+        selected="Create your own Custom Plot"
+    ),
+    # Footer
+    ui.tags.footer(
+        ui.div(
+            ui.p("© 2025 (x)Ability Design Lab. All rights reserved.", class_="mb-1"),
+            ui.p("Built with MAIDR to advance inclusive data science.", class_="small mb-0"),
+            class_="text-center"
         ),
-        # Second tab: Box Plot with a single variable for Tutorial
-        ui.nav_panel(
-            "Box Plot",
-            ui.input_select(
-                "boxplot_type",
-                "Select box plot type:",
-                choices=[
-                    "Positively Skewed with Outliers",
-                    "Negatively Skewed with Outliers",
-                    "Symmetric with Outliers",
-                    "Symmetric without Outliers",
-                ],
-                selected="Positively Skewed with Outliers",
-            ),
-            ui.input_select(
-                "boxplot_color",
-                "Select box plot color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_boxplot",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_boxplot",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_boxplot",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_boxplot_output"),
-        ),
-        # Third tab: Scatter Plot with dropdowns and plot
-        ui.nav_panel(
-            "Scatter Plot",
-            ui.input_select(
-                "scatterplot_type",
-                "Select scatter plot type:",
-                choices=[
-                    "No Correlation",
-                    "Weak Positive Correlation",
-                    "Strong Positive Correlation",
-                    "Weak Negative Correlation",
-                    "Strong Negative Correlation",
-                ],
-                selected="No Correlation",
-            ),
-            ui.input_select(
-                "scatter_color",
-                "Select scatter plot color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_scatter",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_scatter",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_scatter",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_scatterplot_output"),
-        ),
-        # Fourth tab: Bar Plot with dropdowns and plot
-        ui.nav_panel(
-            "Bar Plot",
-            ui.input_select(
-                "barplot_color",
-                "Select bar plot color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_barplot",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_barplot",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_barplot",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_barplot_output"),
-        ),
-        # New tab: Line Plot
-        ui.nav_panel(
-            "Line Plot",
-            ui.input_select(
-                "lineplot_type",
-                "Select line plot type:",
-                choices=[
-                    "Linear Trend",
-                    "Exponential Growth",
-                    "Sinusoidal Pattern",
-                    "Random Walk",
-                ],
-                selected="Linear Trend",
-            ),
-            ui.input_select(
-                "lineplot_color",
-                "Select line plot color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_lineplot",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_lineplot",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_lineplot",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_lineplot_output"),
-        ),
-        # New tab: Heatmap
-        ui.nav_panel(
-            "Heatmap",
-            ui.input_select(
-                "heatmap_type",
-                "Select heatmap type:",
-                choices=[
-                    "Random",
-                    "Correlated",
-                    "Checkerboard",
-                ],
-                selected="Random",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_heatmap",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_heatmap",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_heatmap",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_heatmap_output"),
-        ),
-        # New tab: Multiline Plot
-        ui.nav_panel(
-            "Multiline Plot",
-            ui.input_select(
-                "multiline_type",
-                "Select multiline plot type:",
-                choices=[
-                    "Simple Trends",
-                    "Seasonal Patterns",
-                    "Growth Comparison",
-                    "Random Series",
-                ],
-                selected="Simple Trends",
-            ),
-            ui.input_select(
-                "multiline_color",
-                "Select color palette:",
-                choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_multiline",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_multiline",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_multiline",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_multiline_plot_output"),
-        ),
-        # New tab: Multilayer Plot
-        ui.nav_panel(
-            "Multilayer Plot",
-            ui.input_select(
-                "multilayer_background_type",
-                "Select background plot type:",
-                choices=[
-                    "Bar Plot",
-                    "Histogram",
-                    "Scatter Plot"
-                ],
-                selected="Bar Plot",
-            ),
-            ui.input_select(
-                "multilayer_background_color",
-                "Select background color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.input_select(
-                "multilayer_line_color",
-                "Select line color:",
-                choices=list(color_palettes.keys()),
-                selected="Default",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_multilayer",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_multilayer",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_multilayer",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_multilayer_plot_output"),
-        ),
-        
-        # New tab: Multipanel Plot
-        ui.nav_panel(
-            "Multipanel Plot",
-            ui.p("Three-panel plot with line plot and bar plots"),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_multipanel",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_multipanel",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_multipanel",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_multipanel_plot_output"),
-        ),
-        
-        # New tab: Candlestick Chart
-        ui.nav_panel(
-            "Candlestick Chart",
-            ui.input_select(
-                "candlestick_company",
-                "Select company:",
-                choices=[
-                    "Tesla",
-                    "Apple", 
-                    "NVIDIA",
-                    "Microsoft",
-                    "Google",
-                    "Amazon",
-                ],
-                selected="Tesla",
-            ),
-            ui.input_select(
-                "candlestick_timeframe",
-                "Select timeframe:",
-                choices=[
-                    "Daily",
-                    "Monthly",
-                    "Yearly",
-                ],
-                selected="Daily",
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "download_graphics_candlestick",
-                    "Download Graph in *.svg",
-                    class_="btn btn-primary",
-                ),
-                ui.input_action_button(
-                    "download_html_candlestick",
-                    "Download Multimodal Plot in *.html",
-                    class_="btn btn-secondary",
-                ),
-                ui.input_action_button(
-                    "embed_code_button_candlestick",
-                    "Embed Code",
-                    class_="btn btn-success",
-                    aria_label="Get embed code for your website",
-                ),
-                class_="text-center mb-3",
-                style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-            ),
-            ui.output_ui("create_candlestick_output"),
-        ),
-        
+        class_="app-footer"
     ),
 )
 
@@ -1616,6 +1822,7 @@ def server(input, output, session):
         plot_type = getattr(input, 'plot_type', lambda: None)()
         
         if df is None or not plot_type or plot_type == "":
+            current_figure.set(None)
             return None
             
         try:
@@ -1847,4 +2054,6 @@ def extract_embed_content(html_content):
     return iframe_embed
 
 # Create the Shiny app
-app = App(app_ui, server)
+static_img_dir = Path(__file__).parent / "img"
+# The mount point must start with '/' so that Starlette accepts it
+app = App(app_ui, server, static_assets={"/img": static_img_dir})
