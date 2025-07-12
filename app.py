@@ -14,10 +14,21 @@ from shiny.types import FileInfo
 import datetime
 import re
 
-# Import plot modules
-from plots.utils import color_palettes
-from plots.histogram import create_histogram, create_custom_histogram
-from plots.boxplot import create_boxplot, create_custom_boxplot
+# Import candlestick module
+from plots.candlestick import (
+    create_candlestick,
+    create_tutorial_candlestick_basics,
+    create_tutorial_trends_volatility,
+    create_tutorial_reversal_breakout,
+    create_tutorial_hammer_pattern,
+    create_tutorial_shooting_star_pattern
+)
+
+# Import help menu module
+from HelpMenu import get_help_modal, QUICK_HELP_TIPS
+
+# Set random seed
+np.random.seed(1000)
 
 # Function to save HTML with UTF-8 encoding to avoid Windows encoding issues
 def save_html_utf8(fig, filepath):
@@ -138,22 +149,7 @@ def save_html_utf8(fig, filepath):
         sys.stdout = old_stdout
         sys.stderr = old_stderr
 
-from plots.scatterplot import create_scatterplot, create_custom_scatterplot
-from plots.barplot import create_barplot, create_custom_barplot
-from plots.lineplot import create_lineplot, create_custom_lineplot
-from plots.heatmap import create_heatmap, create_custom_heatmap
-from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
-from plots.multilayerplot import create_multilayer_plot, create_custom_multilayer_plot
-from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
-from plots.candlestick import create_candlestick
-
-# Import help menu module
-from HelpMenu import get_help_modal, QUICK_HELP_TIPS
-
-# Set random seed
-np.random.seed(1000)
-
-# Define the UI components for the Shiny application with tabs and sidebar
+# Define the UI components for the candlestick dashboard
 app_ui = ui.page_fluid(
     # Head content for custom CSS and JavaScript
     ui.head_content(
@@ -188,8 +184,8 @@ app_ui = ui.page_fluid(
             }
             .main-content {
                 flex: 1 0 auto;
-                min-height: calc(100vh - 60px);  /* Subtract footer height */
-                padding-bottom: 2rem;  /* Add some padding before footer */
+                min-height: calc(100vh - 60px);
+                padding-bottom: 2rem;
             }
             /* Enhanced footer */
             footer.app-footer {
@@ -247,105 +243,90 @@ app_ui = ui.page_fluid(
                 font-size: 1.05rem;
                 line-height: 1.6;
             }
-            .embed-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.5);
-                z-index: 1000;
-                display: none;
+            
+            /* Tutorial content styling */
+            .tutorial-content {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem;
             }
-            .embed-modal-content {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background-color: white;
-                padding: 20px;
+            .tutorial-module {
+                background-color: #f8f9fa;
                 border-radius: 8px;
-                max-width: 80%;
-                max-height: 80%;
-                width: 600px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                padding: 2rem;
+                margin-bottom: 2rem;
+                border-left: 4px solid #0d6efd;
             }
-            .embed-modal-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
-                border-bottom: 1px solid #dee2e6;
-                padding-bottom: 10px;
+            body.dark-theme .tutorial-module {
+                background-color: #1a1a1a;
+                border-left-color: #6c757d;
             }
-            .embed-modal-body textarea {
-                width: 100%;
-                height: 300px;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                border: 1px solid #ccc;
-                padding: 10px;
-                resize: vertical;
+            .tutorial-module h3 {
+                color: #0d6efd;
+                margin-bottom: 1rem;
             }
-            .embed-modal-footer {
-                margin-top: 15px;
-                text-align: right;
+            body.dark-theme .tutorial-module h3 {
+                color: #adb5bd;
             }
-            .embed-modal-footer button {
-                margin-left: 10px;
+            .tutorial-module p {
+                line-height: 1.6;
+                margin-bottom: 1rem;
             }
+            .tutorial-module ul {
+                margin-left: 1.2rem;
+                margin-bottom: 1rem;
+            }
+            .tutorial-module li {
+                margin-bottom: 0.5rem;
+            }
+            .tutorial-plot-container {
+                background-color: white;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 1rem;
+                margin: 1rem 0;
+            }
+            body.dark-theme .tutorial-plot-container {
+                background-color: #000000;
+                border-color: #444;
+            }
+            .tutorial-intro {
+                background-color: #e3f2fd;
+                border-radius: 8px;
+                padding: 2rem;
+                margin-bottom: 2rem;
+                border-left: 4px solid #2196f3;
+            }
+            body.dark-theme .tutorial-intro {
+                background-color: #0d1b2a;
+                border-left-color: #415a77;
+            }
+            
             /* Dark mode refinements */
             body.dark-theme {
-                background-color: #000000; /* true black */
+                background-color: #000000;
                 color: #ffffff;
             }
             body.dark-theme footer {
                 background-color: #000000;
                 color: #ffffff;
             }
-            /* Improve nav visibility in dark theme */
             body.dark-theme .nav-tabs .nav-link {
                 color: #ffffff;
             }
             body.dark-theme .nav-tabs .nav-link.active {
-                color: #0d6efd; /* Bootstrap primary for active tab */
+                color: #0d6efd;
             }
-
-            /* Dark theme enhancements for inputs and tables */
             body.dark-theme input[type="file"],
-            body.dark-theme .btn, /* Buttons inside dark theme */
+            body.dark-theme .btn,
             body.dark-theme select,
             body.dark-theme option {
                 color: #ffffff;
                 background-color: #333333;
             }
-
-            body.dark-theme table {
-                background-color: #000000 !important;
-                color: #ffffff !important;
-            }
-            body.dark-theme table th {
-                background-color: #111111 !important;
-                color: #ffffff !important;
-            }
-            body.dark-theme table td {
-                border-color: #444444 !important;
+            body.dark-theme .main-content {
                 background-color: #000000 !important;
             }
-
-            /* Ensure all table text inherits white */
-            body.dark-theme table, 
-            body.dark-theme table * {
-                color: #ffffff !important;
-            }
-
-            /* Plot output divs */
-            body.dark-theme .shiny-html-output,
-            body.dark-theme .shiny-bound-output {
-                background-color: #000000 !important;
-            }
-
-            /* Settings dropdown / nav menu styles in dark mode */
             body.dark-theme .dropdown-menu {
                 background-color: #000000 !important;
                 color: #ffffff !important;
@@ -360,52 +341,7 @@ app_ui = ui.page_fluid(
                 background-color: #222222 !important;
                 color: #ffffff !important;
             }
-            /* Tab panel content under dropdown */
-            body.dark-theme .tab-pane {
-                background-color: #000000 !important;
-                color: #ffffff !important;
-            }
-
-            /* Any grid columns/rows inside main content */
-            body.dark-theme .main-content .row,
-            body.dark-theme .main-content [class^="col"],
-            body.dark-theme .main-content [class*=" col"] {
-                background-color: #000000 !important;
-            }
-
-            /* Ensure plot containers maintain dark backdrop */
-            body.dark-theme .about-section,
-            body.dark-theme .main-content div[id^="create_"],
-            body.dark-theme .main-content div[id$="_output"],
-            body.dark-theme .main-content .maidr-root,
-            body.dark-theme .main-content .maidr-container {
-                background-color: #000000 !important;
-            }
-
-            /* Ensure main content/plot columns don't show white */
-            body.dark-theme .main-content {
-                background-color: #000000 !important;
-            }
-
-            /* Containers that may still be white */
-            body.dark-theme .container,
-            body.dark-theme .container-fluid,
-            body.dark-theme .nav-panel,
-            body.dark-theme .nav-panel > div {
-                background-color: #000000 !important;
-            }
-
-            /* Shiny tab content wrappers */
-            body.dark-theme .tab-content,
-            body.dark-theme .tab-content .tab-pane {
-                background-color: #000000 !important;
-            }
-
-            /* Fallback: any element inside main-content still white gets forced to black */
-            body.dark-theme .main-content div[style*="background"] {
-                background-color: #000000 !important;
-            }
-        """
+            """
         ),
         ui.tags.script(
             """
@@ -428,7 +364,6 @@ app_ui = ui.page_fluid(
             });
             
             Shiny.addCustomMessageHandler("show_help", function(message) {
-                // Trigger the help modal
                 Shiny.setInputValue("show_help_modal", Math.random());
             });
             
@@ -436,32 +371,25 @@ app_ui = ui.page_fluid(
                 console.log('Download triggered for:', data.filename);
                 
                 try {
-                    // Determine MIME type (default to HTML if not provided)
                     var mimeType = data.mime_type || 'text/html;charset=utf-8';
-                    // Create a blob from the content
                     var blob = new Blob([data.content], { type: mimeType });
                     console.log('Blob created:', blob.size, 'bytes');
                     
-                    // Check if the browser supports the download attribute
                     if (typeof document.createElement('a').download !== 'undefined') {
                         console.log('Using download attribute method');
                         
-                        // Create a download link
                         var link = document.createElement('a');
                         var url = window.URL.createObjectURL(blob);
                         link.href = url;
                         link.download = data.filename;
                         link.style.display = 'none';
                         
-                        // Add to document
                         document.body.appendChild(link);
                         console.log('Link added to document');
                         
-                        // Trigger click immediately
                         link.click();
                         console.log('Link clicked');
                         
-                        // Clean up after a short delay
                         setTimeout(function() {
                             try {
                                 document.body.removeChild(link);
@@ -474,12 +402,10 @@ app_ui = ui.page_fluid(
                         
                     } else {
                         console.log('Using fallback method');
-                        // Fallback for older browsers
                         var url = window.URL.createObjectURL(blob);
                         var newWindow = window.open(url, '_blank');
                         if (!newWindow) {
                             console.log('Popup blocked, trying alternative');
-                            // If popup is blocked, try alternative
                             window.location.href = url;
                         }
                         setTimeout(function() {
@@ -489,7 +415,6 @@ app_ui = ui.page_fluid(
                     
                     announceToScreenReader('Download started: ' + data.filename);
                     
-                    // Visual alert for users
                     try {
                         var alertDiv = document.createElement('div');
                         alertDiv.className = 'alert alert-success alert-dismissible fade show';
@@ -510,7 +435,6 @@ app_ui = ui.page_fluid(
                         alertDiv.appendChild(closeBtn);
 
                         document.body.appendChild(alertDiv);
-                        // Auto-dismiss after 4 s
                         setTimeout(function() {
                             try { alertDiv.classList.remove('show'); alertDiv.remove(); } catch(e) {}
                         }, 4000);
@@ -528,7 +452,6 @@ app_ui = ui.page_fluid(
                 try {
                     navigator.clipboard.writeText(text).then(function() {
                         announceToScreenReader('Embed code copied to clipboard');
-                        // Visual toast
                         var toast = document.createElement('div');
                         toast.className = 'alert alert-info alert-dismissible fade show';
                         toast.setAttribute('role', 'alert');
@@ -553,7 +476,6 @@ app_ui = ui.page_fluid(
             });
             
             Shiny.addCustomMessageHandler("show_embed_modal", function(embedCode) {
-                // Trigger showing the embed modal in Shiny
                 Shiny.setInputValue("embed_code_content", embedCode);
                 Shiny.setInputValue("show_embed_modal_trigger", Math.random());
             });
@@ -573,7 +495,6 @@ app_ui = ui.page_fluid(
                     document.body.appendChild(ariaLive);
                 }
                 
-                // Clear previous message and add new one
                 ariaLive.textContent = '';
                 setTimeout(function() {
                     ariaLive.textContent = message;
@@ -582,13 +503,12 @@ app_ui = ui.page_fluid(
             
             // Announce when plots are loaded
             document.addEventListener('DOMContentLoaded', function() {
-                // Watch for plot updates
                 var observer = new MutationObserver(function(mutations) {
                     mutations.forEach(function(mutation) {
                         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                             for (var i = 0; i < mutation.addedNodes.length; i++) {
                                 var node = mutation.addedNodes[i];
-                                if (node.nodeType === 1) { // Element node
+                                if (node.nodeType === 1) {
                                     if (node.querySelector && node.querySelector('svg, canvas, img')) {
                                         announceToScreenReader('Plot has been updated and is now available for exploration');
                                         break;
@@ -599,7 +519,6 @@ app_ui = ui.page_fluid(
                     });
                 });
                 
-                // Start observing
                 observer.observe(document.body, {
                     childList: true,
                     subtree: true
@@ -615,30 +534,24 @@ app_ui = ui.page_fluid(
                         activeElement.isContentEditable
                     );
                     
-                    // Check if 'h' key is pressed (not in input fields)
                     if (event.key === 'h' || event.key === 'H') {
-                        // Only trigger help if not in an input field
                         if (!isInputField) {
                             event.preventDefault();
                             
-                            // Check if help modal is currently open
                             var helpModal = document.querySelector('#help_modal');
                             var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
                                             helpModal.classList.contains('show');
                             
                             if (isModalOpen) {
-                                // If modal is open, close it
                                 Shiny.setInputValue("close_help", Math.random());
                                 announceToScreenReader('Help menu closed.');
                             } else {
-                                // If modal is closed, open it
                                 Shiny.setInputValue("show_help_modal", Math.random());
                                 announceToScreenReader('Help menu opened. Use Tab to navigate through help sections.');
                             }
                         }
                     }
                     
-                    // Check if ESC key is pressed to close help menu
                     if (event.key === 'Escape') {
                         var helpModal = document.querySelector('#help_modal');
                         var isModalOpen = helpModal && helpModal.style.display !== 'none' && 
@@ -653,7 +566,6 @@ app_ui = ui.page_fluid(
                 });
             });
 
-            // Generic visual alert handler (type: 'success' | 'info' | 'warning' | 'danger')
             Shiny.addCustomMessageHandler("show_alert", function(data) {
                 try {
                     var alertDiv = document.createElement('div');
@@ -689,37 +601,38 @@ app_ui = ui.page_fluid(
         **{"aria-live": "polite", "aria-atomic": "true"},
         class_="sr-only"
     ),
-    # (Removed separate header logo – now logo sits inside navbar)
+    # Main content
     ui.tags.main(
         {"role": "main", "aria-label": "Main content"},
         ui.div(
             ui.navset_tab(
-                # Logo acts as About tab and appears first in the navbar
+                # About tab with logo
                 ui.nav_panel(
                     ui.tags.img(src="img/light.jpg", id="maidr_logo", alt="About Us", style="height:30px;"),
                     ui.div(
                         ui.tags.img(src="img/lab_logo.jpg", alt="(x)Ability Design Lab Logo", class_="about-logo"),
                         ui.div(
-                            ui.h2("About MAIDR & (x)Ability Design Lab", class_="mb-3 fw-bold"),
+                            ui.h2("MAIDR Finance Dashboard", class_="mb-3 fw-bold"),
                             ui.p(
-                                "MAIDR (Multimodal Access and Interactive Data Representation) is an open, research-driven platform developed by the ",
+                                "Welcome to the MAIDR Finance Dashboard, a specialized tool for learning financial chart interpretation through accessible, multimodal data visualization. This dashboard focuses specifically on candlestick charts - the fundamental building blocks of financial analysis.",
+                                class_="about-paragraph"
+                            ),
+                            ui.p(
+                                "Developed by the ",
                                 ui.tags.a("(x)Ability Design Lab", href="https://xabilitylab.ischool.illinois.edu/", target="_blank"),
-                                " at the University of Illinois Urbana–Champaign. Grounded in human-computer interaction and accessibility scholarship, MAIDR operationalizes the vision of \"data insights for all\" by translating traditional charts into synchronized visual, tactile (braille), textual, sonic, and conversational artifacts.",
+                                " at the University of Illinois Urbana–Champaign, this dashboard provides synchronized visual, tactile (braille), textual, and sonic representations of financial data, making trading education accessible to all users.",
                                 class_="about-paragraph"
                             ),
                             ui.tags.ul(
-                                ui.tags.li("Synchronized multimodal output ensuring blind and sighted analysts share a single, canonical representation."),
-                                ui.tags.li("One-line integration with Matplotlib / Seaborn through the \"maidr.show()\" helper."),
-                                ui.tags.li("Designed for reproducible research, Jupyter notebooks, Streamlit dashboards, and Quarto publications."),
-                                ui.tags.li("Extensible architecture to accommodate future visualization types and assistive modalities."),
+                                ui.tags.li("Interactive candlestick charts with three layers: price candles, volume bars, and moving average trend lines"),
+                                ui.tags.li("Structured tutorial covering fundamental concepts from basic patterns to advanced trading strategies"),
+                                ui.tags.li("Hands-on practice environment with real-time chart generation"),
+                                ui.tags.li("Screen reader compatible with full keyboard navigation support"),
+                                ui.tags.li("Downloadable charts in both SVG and HTML formats for further study"),
                                 class_="mb-3"
                             ),
                             ui.p(
-                                "The full TypeScript engine and accompanying design guidelines are openly available in our ",
-                                ui.tags.a("maidr repository", href="https://github.com/xability/maidr", target="_blank"),
-                                ". Python bindings and examples are maintained in the ",
-                                ui.tags.a("py-maidr repo", href="https://github.com/xability/py-maidr", target="_blank"),
-                                ". We welcome issues, pull requests, and scholarly collaborations.",
+                                "Navigate through the tutorial to learn essential concepts like bullish/bearish patterns, trend analysis, and reversal strategies. Then apply your knowledge in the practice section with interactive chart generation.",
                                 class_="about-paragraph"
                             ),
                             class_="about-text"
@@ -727,6 +640,7 @@ app_ui = ui.page_fluid(
                         class_="about-section my-4"
                     )
                 ),
+                # Settings dropdown
                 ui.nav_menu(
                     "Settings",
                     ui.nav_control(
@@ -749,515 +663,244 @@ app_ui = ui.page_fluid(
                         )
                     ),
                 ),
-                # Fifth tab: Practice tab with file upload, data types, and custom plot creation
+                # Tutorial tab
                 ui.nav_panel(
-                    "Create your own Custom Plot",
-                    ui.row(
-                        # Left column for file upload, table, and conditional dropdowns (40% width)
-                        ui.column(
-                            2,
-                            ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
-                            ui.output_table("data_types"),
-                            ui.output_ui("plot_options"),  # Conditionally render dropdowns
-                            ui.output_ui("variable_input"),  # Variable input for specific plot
-                        ),
-                        # Right column for the plot (80% width)
-                        ui.column(10, 
-                            ui.div(
-                                ui.input_action_button(
-                                    "download_graphics_custom",
-                                    "Download Graph in svg",
-                                    class_="btn btn-primary",
-                                    disabled=True
-                                ),
-                                ui.input_action_button(
-                                    "download_html_custom",
-                                    "Download Multimodal Plot in html",
-                                    class_="btn btn-secondary",
-                                    disabled=True
-                                ),
-                                ui.input_action_button(
-                                    "embed_code_button_custom",
-                                    "Embed Code",
-                                    class_="btn btn-success",
-                                    aria_label="Get embed code for your website",
-                                    disabled=True
-                                ),
-                                class_="text-center mb-3",
-                                style="display: flex; gap: 10px; justify-content: center; flex-wrap;"
+                    "Tutorial",
+                    ui.div(
+                        ui.div(
+                            ui.h1("Tutorial: Interpreting Financial Charts for Trading", class_="text-center mb-4"),
+                            ui.p(
+                                "Welcome to this introductory guide to understanding financial charts. This session is specifically designed for blind and visually impaired users, working with charts that have three layers of information, all readable by screen-reading software:",
+                                class_="lead text-center"
                             ),
-                            ui.tags.main(
-                                {"role": "main", "aria-label": "Plot display area"},
-                                ui.output_ui("create_custom_plot")
+                            ui.tags.ol(
+                                ui.tags.li("Candlesticks: Represent price movements over a specific period"),
+                                ui.tags.li("Volume Bars: Show trading activity for each period"),
+                                ui.tags.li("Moving Average Trend Line: Helps identify overall market direction"),
+                                class_="mb-4"
+                            ),
+                            ui.p(
+                                "In the MAIDR Finance Dashboard, you can navigate between these layers using Page Up and Page Down keys. Our goal is to help you build a mental model of market behavior to identify potential trading opportunities.",
+                                class_="text-center mb-4"
+                            ),
+                            class_="tutorial-intro"
+                        ),
+                        
+                        # Module 1: Understanding the Building Blocks
+                        ui.div(
+                            ui.h3("Module 1: Understanding the Building Blocks"),
+                            ui.p(
+                                "Let's start with the most fundamental component: a single candlestick. Each candlestick tells the trading story for one period and provides four key pieces of information:"
+                            ),
+                            ui.tags.ul(
+                                ui.tags.li("Open: The price at the beginning of the period"),
+                                ui.tags.li("Close: The price at the end of the period"),
+                                ui.tags.li("High: The highest price reached during the period"),
+                                ui.tags.li("Low: The lowest price reached during the period")
+                            ),
+                            ui.p(
+                                "The relationship between open and close prices determines who was in control - buyers or sellers. This leads to two key concepts:"
+                            ),
+                            ui.tags.ul(
+                                ui.tags.li("Bullish candle: Close price is higher than open price (buyers in control)"),
+                                ui.tags.li("Bearish candle: Close price is lower than open price (sellers in control)")
+                            ),
+                            ui.div(
+                                ui.h4("Explore Basic Candlestick Patterns"),
+                                ui.p("The chart below shows clear examples of bullish and bearish candles. Use your screen reader to explore each candle's open, high, low, and close values."),
+                                ui.output_ui("tutorial_basics_output"),
+                                class_="tutorial-plot-container"
+                            ),
+                            class_="tutorial-module"
+                        ),
+                        
+                        # Module 2: Reading the Market's Story
+                        ui.div(
+                            ui.h3("Module 2: Reading the Market's Story"),
+                            ui.p("Now let's understand how multiple candlesticks tell the market's story through trends and volatility:"),
+                            ui.tags.ul(
+                                ui.tags.li("Uptrend: Series of higher highs and higher lows (bullish sign)"),
+                                ui.tags.li("Downtrend: Series of lower highs and lower lows (bearish sign)"),
+                                ui.tags.li("Volatility: Measured by the difference between high and low prices"),
+                                ui.tags.li("Consolidation: Sideways trading showing market indecision"),
+                                ui.tags.li("Momentum: Strong, sustained price movement in one direction")
+                            ),
+                            ui.p(
+                                "Pay attention to price gaps - when the opening price differs significantly from the previous close, often signaling strong shifts in market sentiment."
+                            ),
+                            ui.div(
+                                ui.h4("Explore Market Trends and Volatility"),
+                                ui.p("This chart demonstrates an uptrend, followed by a downtrend, and then high volatility. Notice how the moving average lines help identify the overall direction."),
+                                ui.output_ui("tutorial_trends_output"),
+                                class_="tutorial-plot-container"
+                            ),
+                            class_="tutorial-module"
+                        ),
+                        
+                        # Module 3: Basic Trading Concepts
+                        ui.div(
+                            ui.h3("Module 3: Basic Trading Concepts"),
+                            ui.p("Understanding key trading concepts helps identify potential opportunities:"),
+                            ui.tags.ul(
+                                ui.tags.li("Reversal: Change in price trend direction"),
+                                ui.tags.li("Breakout: Price moves beyond known support or resistance levels"),
+                                ui.tags.li("Entry Point: Price level where you enter a trade"),
+                                ui.tags.li("Stop-Loss: Pre-set order to limit losses if price moves against you"),
+                                ui.tags.li("Take-Profit: Order to close trade once profit target is reached")
+                            ),
+                            ui.p(
+                                "Combining analysis of candlesticks, volume, and trend lines helps identify logical entry points and set appropriate stop-loss and take-profit targets."
+                            ),
+                            ui.div(
+                                ui.h4("Explore Reversal and Breakout Patterns"),
+                                ui.p("This chart shows a downtrend, followed by a reversal formation, and then a breakout upward. Notice the volume increase during these key moments."),
+                                ui.output_ui("tutorial_reversal_output"),
+                                class_="tutorial-plot-container"
+                            ),
+                            class_="tutorial-module"
+                        ),
+                        
+                        # Module 4: Basic Trading Strategies
+                        ui.div(
+                            ui.h3("Module 4: Basic Trading Strategies"),
+                            ui.p("Here are two fundamental candlestick patterns used in trading strategies:"),
+                            
+                            ui.h4("Strategy 1: The Bullish Hammer Reversal"),
+                            ui.p("Used when a market has been in a downtrend and a 'Hammer' pattern appears:"),
+                            ui.tags.ul(
+                                ui.tags.li("Market Context: Must follow a downtrend"),
+                                ui.tags.li("Pattern: Small body near top, very long lower wick, little/no upper wick"),
+                                ui.tags.li("Signal: Lower wick should be at least twice the body length"),
+                                ui.tags.li("Entry: Wait for confirmation on the next candle"),
+                                ui.tags.li("Stop-Loss: Place just below the hammer's low")
+                            ),
+                            ui.div(
+                                ui.h5("Explore Hammer Reversal Pattern"),
+                                ui.p("This chart shows a downtrend leading to a hammer formation on day 7, followed by confirmation and recovery."),
+                                ui.output_ui("tutorial_hammer_output"),
+                                class_="tutorial-plot-container"
+                            ),
+                            
+                            ui.h4("Strategy 2: The Bearish Shooting Star Reversal"),
+                            ui.p("Used when a market has been in an uptrend and a 'Shooting Star' pattern appears:"),
+                            ui.tags.ul(
+                                ui.tags.li("Market Context: Must follow an uptrend"),
+                                ui.tags.li("Pattern: Small body at bottom, long upper wick, very small lower wick"),
+                                ui.tags.li("Signal: Indicates selling pressure after buyers tried to push higher"),
+                                ui.tags.li("Entry: Wait for confirmation on the next candle"),
+                                ui.tags.li("Stop-Loss: Place just above the shooting star's high")
+                            ),
+                            ui.div(
+                                ui.h5("Explore Shooting Star Reversal Pattern"),
+                                ui.p("This chart shows an uptrend leading to a shooting star formation on day 7, followed by confirmation and decline."),
+                                ui.output_ui("tutorial_shooting_star_output"),
+                                class_="tutorial-plot-container"
+                            ),
+                            
+                            ui.p(
+                                "Remember: These patterns require confirmation on the following candle before entering a trade. Always use proper risk management with stop-loss orders.",
+                                class_="alert alert-info"
+                            ),
+                            class_="tutorial-module"
+                        ),
+                        
+                        class_="tutorial-content"
+                    )
+                ),
+                # Tasks tab
+                ui.nav_panel(
+                    "Practice Tasks",
+                    ui.div(
+                        ui.h2("Practice Your Skills", class_="text-center mb-4"),
+                        ui.p(
+                            "Now it's time to apply what you've learned! Use the controls below to generate different candlestick charts and practice identifying patterns, trends, and trading opportunities.",
+                            class_="lead text-center mb-4"
+                        ),
+                        ui.row(
+                            ui.column(
+                                3,
+                                ui.div(
+                                    ui.h4("Chart Controls"),
+                                    ui.input_select(
+                                        "candlestick_company",
+                                        "Select company:",
+                                        choices=[
+                                            "Tesla",
+                                            "Apple", 
+                                            "NVIDIA",
+                                            "Microsoft",
+                                            "Google",
+                                            "Amazon",
+                                        ],
+                                        selected="Tesla",
+                                    ),
+                                    ui.input_select(
+                                        "candlestick_timeframe",
+                                        "Select timeframe:",
+                                        choices=[
+                                            "Daily",
+                                            "Monthly",
+                                            "Yearly",
+                                        ],
+                                        selected="Daily",
+                                    ),
+                                    ui.br(),
+                                    ui.div(
+                                        ui.input_action_button(
+                                            "download_graphics_candlestick",
+                                            "Download SVG",
+                                            class_="btn btn-primary btn-sm",
+                                        ),
+                                        ui.input_action_button(
+                                            "download_html_candlestick",
+                                            "Download HTML",
+                                            class_="btn btn-secondary btn-sm",
+                                        ),
+                                        ui.input_action_button(
+                                            "embed_code_button_candlestick",
+                                            "Embed Code",
+                                            class_="btn btn-success btn-sm",
+                                            aria_label="Get embed code for your website",
+                                        ),
+                                        class_="d-grid gap-2",
+                                    ),
+                                    class_="card p-3"
+                                )
+                            ),
+                            ui.column(
+                                9,
+                                ui.div(
+                                    ui.h4("Interactive Candlestick Chart"),
+                                    ui.p(
+                                        "This chart includes all three layers: candlesticks, volume bars, and moving average trend lines. Use Page Up/Down to navigate between layers in your screen reader.",
+                                        class_="text-muted"
+                                    ),
+                                    ui.output_ui("create_candlestick_output"),
+                                    class_="card p-3"
+                                )
                             )
-                        ),
-                    ),
-                ),
-                # First tab: Histogram with dropdowns and plot
-                ui.nav_panel(
-                    "Histogram",
-                    ui.input_select(
-                        "distribution_type",
-                        "Select histogram distribution type:",
-                        choices=[
-                            "Normal Distribution",
-                            "Positively Skewed",
-                            "Negatively Skewed",
-                            "Unimodal Distribution",
-                            "Bimodal Distribution",
-                            "Multimodal Distribution",
-                        ],
-                        selected="Normal Distribution",
-                    ),
-                    ui.input_select(
-                        "hist_color",
-                        "Select histogram color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_histogram",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_histogram",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_histogram",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_histogram_output")
-                    ),
-                ),
-                # Second tab: Box Plot with a single variable for Tutorial
-                ui.nav_panel(
-                    "Box Plot",
-                    ui.input_select(
-                        "boxplot_type",
-                        "Select box plot type:",
-                        choices=[
-                            "Positively Skewed with Outliers",
-                            "Negatively Skewed with Outliers",
-                            "Symmetric with Outliers",
-                            "Symmetric without Outliers",
-                        ],
-                        selected="Positively Skewed with Outliers",
-                    ),
-                    ui.input_select(
-                        "boxplot_color",
-                        "Select box plot color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_boxplot",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_boxplot",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_boxplot",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_boxplot_output")
-                    ),
-                ),
-                # Third tab: Scatter Plot with dropdowns and plot
-                ui.nav_panel(
-                    "Scatter Plot",
-                    ui.input_select(
-                        "scatterplot_type",
-                        "Select scatter plot type:",
-                        choices=[
-                            "No Correlation",
-                            "Weak Positive Correlation",
-                            "Strong Positive Correlation",
-                            "Weak Negative Correlation",
-                            "Strong Negative Correlation",
-                        ],
-                        selected="No Correlation",
-                    ),
-                    ui.input_select(
-                        "scatter_color",
-                        "Select scatter plot color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_scatter",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_scatter",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_scatter",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_scatterplot_output")
-                    ),
-                ),
-                # Fourth tab: Bar Plot with dropdowns and plot
-                ui.nav_panel(
-                    "Bar Plot",
-                    ui.input_select(
-                        "barplot_color",
-                        "Select bar plot color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_barplot",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_barplot",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_barplot",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_barplot_output")
-                    ),
-                ),
-                # New tab: Line Plot
-                ui.nav_panel(
-                    "Line Plot",
-                    ui.input_select(
-                        "lineplot_type",
-                        "Select line plot type:",
-                        choices=[
-                            "Linear Trend",
-                            "Exponential Growth",
-                            "Sinusoidal Pattern",
-                            "Random Walk",
-                        ],
-                        selected="Linear Trend",
-                    ),
-                    ui.input_select(
-                        "lineplot_color",
-                        "Select line plot color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_lineplot",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_lineplot",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_lineplot",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_lineplot_output")
-                    ),
-                ),
-                # New tab: Heatmap
-                ui.nav_panel(
-                    "Heatmap",
-                    ui.input_select(
-                        "heatmap_type",
-                        "Select heatmap type:",
-                        choices=[
-                            "Random",
-                            "Correlated",
-                            "Checkerboard",
-                        ],
-                        selected="Random",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_heatmap",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_heatmap",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_heatmap",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_heatmap_output")
-                    ),
-                ),
-                # New tab: Multiline Plot
-                ui.nav_panel(
-                    "Multiline Plot",
-                    ui.input_select(
-                        "multiline_type",
-                        "Select multiline plot type:",
-                        choices=[
-                            "Simple Trends",
-                            "Seasonal Patterns",
-                            "Growth Comparison",
-                            "Random Series",
-                        ],
-                        selected="Simple Trends",
-                    ),
-                    ui.input_select(
-                        "multiline_color",
-                        "Select color palette:",
-                        choices=["Default", "Colorful", "Pastel", "Dark Tones", "Paired Colors", "Rainbow"],
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_multiline",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_multiline",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_multiline",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_multiline_plot_output")
-                    ),
-                ),
-                # New tab: Multilayer Plot
-                ui.nav_panel(
-                    "Multilayer Plot",
-                    ui.input_select(
-                        "multilayer_background_type",
-                        "Select background plot type:",
-                        choices=[
-                            "Bar Plot",
-                            "Histogram",
-                            "Scatter Plot"
-                        ],
-                        selected="Bar Plot",
-                    ),
-                    ui.input_select(
-                        "multilayer_background_color",
-                        "Select background color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.input_select(
-                        "multilayer_line_color",
-                        "Select line color:",
-                        choices=list(color_palettes.keys()),
-                        selected="Default",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_multilayer",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_multilayer",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_multilayer",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_multilayer_plot_output")
-                    ),
-                ),
-                
-                # New tab: Multipanel Plot
-                ui.nav_panel(
-                    "Multipanel Plot",
-                    ui.p("Three-panel plot with line plot and bar plots"),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_multipanel",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_multipanel",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_multipanel",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_multipanel_plot_output")
-                    ),
-                ),
-                
-                # New tab: Candlestick Chart
-                ui.nav_panel(
-                    "Candlestick Chart",
-                    ui.input_select(
-                        "candlestick_company",
-                        "Select company:",
-                        choices=[
-                            "Tesla",
-                            "Apple", 
-                            "NVIDIA",
-                            "Microsoft",
-                            "Google",
-                            "Amazon",
-                        ],
-                        selected="Tesla",
-                    ),
-                    ui.input_select(
-                        "candlestick_timeframe",
-                        "Select timeframe:",
-                        choices=[
-                            "Daily",
-                            "Monthly",
-                            "Yearly",
-                        ],
-                        selected="Daily",
-                    ),
-                    ui.div(
-                        ui.input_action_button(
-                            "download_graphics_candlestick",
-                            "Download Graph in svg",
-                            class_="btn btn-primary",
-                        ),
-                        ui.input_action_button(
-                            "download_html_candlestick",
-                            "Download Multimodal Plot in html",
-                            class_="btn btn-secondary",
-                        ),
-                        ui.input_action_button(
-                            "embed_code_button_candlestick",
-                            "Embed Code",
-                            class_="btn btn-success",
-                            aria_label="Get embed code for your website",
-                        ),
-                        class_="text-center mb-3",
-                        style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                    ),
-                    ui.tags.main(
-                        {"role": "main", "aria-label": "Plot display area"},
-                        ui.output_ui("create_candlestick_output")
-                    ),
-                
-                    # (Removed textual About tab – logo tab now serves this purpose)
+                        )
+                    )
                 ),
             ),
-            class_="main-content",
-            selected="Create your own Custom Plot"
+            class_="main-content"
         ),
     ),
     # Footer
     ui.tags.footer(
         ui.div(
             ui.p("© 2025 (x)Ability Design Lab. All rights reserved.", class_="mb-1"),
-            ui.p("Built with MAIDR to advance inclusive data science.", class_="small mb-0"),
+            ui.p("MAIDR Finance Dashboard - Making Financial Data Accessible", class_="small mb-0"),
             class_="text-center"
         ),
         class_="app-footer"
     ),
 )
 
-
 # Define the server logic
 def server(input, output, session):
-    uploaded_data = reactive.Value(None)
-    # Add a reactive value to store multiline plot data
-    multiline_data = reactive.Value(None)
-    # Add reactive value to store the current figure
+    # Reactive value to store the current figure
     current_figure = reactive.Value(None)
-    # Add reactive value to store the current maidr object
-    current_maidr = reactive.Value(None)
-    # Add reactive value to store if a plot is available
-    plot_available = reactive.Value(False)
-    
-    # Reactive value to store the last saved file path
-    last_saved_file = reactive.Value(None)
 
     # Helper function to announce messages to screen readers
     async def announce_to_screen_reader(message):
@@ -1290,7 +933,103 @@ def server(input, output, session):
         ui.modal_show(modal)
         await announce_to_screen_reader("Help menu opened via button click. Navigate through sections using Tab key.")
 
-    # Generic function to handle embed code generation for any tab
+    # Update the theme based on the selected option
+    @reactive.effect
+    @reactive.event(input.theme)
+    async def update_theme():
+        await session.send_custom_message("update_theme", input.theme())
+
+    # Tutorial plot outputs
+    @output
+    @render_maidr
+    def tutorial_basics_output():
+        """Create basic candlestick tutorial plot"""
+        try:
+            ax = create_tutorial_candlestick_basics(input.theme())
+            if ax is not None:
+                current_figure.set(ax.figure)
+                return ax
+        except Exception as e:
+            print(f"Error creating tutorial basics: {e}")
+            return None
+
+    @output
+    @render_maidr
+    def tutorial_trends_output():
+        """Create trends and volatility tutorial plot"""
+        try:
+            ax = create_tutorial_trends_volatility(input.theme())
+            if ax is not None:
+                current_figure.set(ax.figure)
+                return ax
+        except Exception as e:
+            print(f"Error creating tutorial trends: {e}")
+            return None
+
+    @output
+    @render_maidr
+    def tutorial_reversal_output():
+        """Create reversal and breakout tutorial plot"""
+        try:
+            ax = create_tutorial_reversal_breakout(input.theme())
+            if ax is not None:
+                current_figure.set(ax.figure)
+                return ax
+        except Exception as e:
+            print(f"Error creating tutorial reversal: {e}")
+            return None
+
+    @output
+    @render_maidr
+    def tutorial_hammer_output():
+        """Create hammer pattern tutorial plot"""
+        try:
+            ax = create_tutorial_hammer_pattern(input.theme())
+            if ax is not None:
+                current_figure.set(ax.figure)
+                return ax
+        except Exception as e:
+            print(f"Error creating tutorial hammer: {e}")
+            return None
+
+    @output
+    @render_maidr
+    def tutorial_shooting_star_output():
+        """Create shooting star pattern tutorial plot"""
+        try:
+            ax = create_tutorial_shooting_star_pattern(input.theme())
+            if ax is not None:
+                current_figure.set(ax.figure)
+                return ax
+        except Exception as e:
+            print(f"Error creating tutorial shooting star: {e}")
+            return None
+
+    # Main candlestick chart for practice
+    @output
+    @render_maidr 
+    def create_candlestick_output():
+        try:
+            candlestick_company = input.candlestick_company()
+            candlestick_timeframe = input.candlestick_timeframe()
+            theme = input.theme()
+            
+            # Create the candlestick plot
+            ax = create_candlestick(candlestick_company, candlestick_timeframe, theme)
+            
+            if ax is None:
+                return None
+                
+            # Store the current figure for HTML saving using plt.gcf()
+            current_figure.set(plt.gcf())
+            
+            # For MAIDR rendering, return the axes object directly
+            return ax
+            
+        except Exception as e:
+            return None
+
+    # Generic function to handle embed code generation
     async def handle_embed_code_generation():
         """Generate embed code with full HTML content that preserves MAIDR functionality"""
         try:
@@ -1304,7 +1043,7 @@ def server(input, output, session):
                 await session.send_custom_message("show_alert", {"type":"warning", "message":"No plot available. Please generate a plot before creating embed code."})
                 return
             
-            # Generate HTML content using the same logic as download - this works!
+            # Generate HTML content using the same logic as download
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False)
             temp_filepath = temp_file.name
             temp_file.close()
@@ -1320,13 +1059,12 @@ def server(input, output, session):
                 
                 print(f"Generated HTML content length: {len(html_content)}")
                 
-                # Extract only the inner content (div with link, script, and SVG) for embedding
-                # This excludes DOCTYPE, html, head, and body tags
+                # Extract only the inner content for embedding
                 embed_code = extract_embed_content(html_content)
                 
                 print(f"Generated embed code length: {len(embed_code)}")
                 
-                # Send the full HTML code to client side
+                # Send the embed code to client side
                 await session.send_custom_message("show_embed_modal", embed_code)
                 await announce_to_screen_reader("Embed code modal opened with secure iframe ready to copy. Contains sandboxed content with full MAIDR accessibility.")
                 
@@ -1343,57 +1081,7 @@ def server(input, output, session):
             import traceback
             traceback.print_exc()
 
-    # Handle embed code button clicks for all tabs
-    @reactive.effect
-    @reactive.event(input.embed_code_button_custom)
-    async def embed_code_button_custom_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_histogram)
-    async def embed_code_button_histogram_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_boxplot)
-    async def embed_code_button_boxplot_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_scatter)
-    async def embed_code_button_scatter_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_barplot)
-    async def embed_code_button_barplot_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_lineplot)
-    async def embed_code_button_lineplot_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_heatmap)
-    async def embed_code_button_heatmap_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_multiline)
-    async def embed_code_button_multiline_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_multilayer)
-    async def embed_code_button_multilayer_clicked():
-        await handle_embed_code_generation()
-
-    @reactive.effect
-    @reactive.event(input.embed_code_button_multipanel)
-    async def embed_code_button_multipanel_clicked():
-        await handle_embed_code_generation()
-
+    # Handle embed code button click
     @reactive.effect
     @reactive.event(input.embed_code_button_candlestick)
     async def embed_code_button_candlestick_clicked():
@@ -1441,14 +1129,8 @@ def server(input, output, session):
             await session.send_custom_message("copy_text_to_clipboard", code)
             await announce_to_screen_reader("Embed code copied to clipboard")
 
-    # Update the theme based on the selected option
-    @reactive.effect
-    @reactive.event(input.theme)
-    async def update_theme():
-        await session.send_custom_message("update_theme", input.theme())
-
     # Generic function to create HTML content and trigger download
-    async def trigger_html_download(plot_type_suffix):
+    async def trigger_html_download():
         """Generate HTML content and trigger browser download with save dialog"""
         try:
             # Get the current figure
@@ -1474,17 +1156,11 @@ def server(input, output, session):
                 with open(temp_filepath, 'r', encoding='utf-8') as f:
                     html_content = f.read()
                 
-                # Generate filename using new scheme: titleofplot_plottype_timestamp
-                plot_title = "plot"
-                try:
-                    if fig and fig.get_axes():
-                        title_text = fig.get_axes()[0].get_title()
-                        if title_text:
-                            plot_title = re.sub(r"\W+", "_", title_text.strip()).strip("_")
-                except Exception:
-                    pass
+                # Generate filename
+                company = input.candlestick_company()
+                timeframe = input.candlestick_timeframe()
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{plot_title}_{plot_type_suffix}_{timestamp}.html"
+                filename = f"{company}_{timeframe}_candlestick_{timestamp}.html"
                 
                 # Send to JavaScript for download
                 await session.send_custom_message("download_file", {
@@ -1505,471 +1181,14 @@ def server(input, output, session):
             await announce_to_screen_reader(f"Error downloading HTML: {str(e)}")
             print(f"Download HTML error: {e}")
 
-    # Handle download button clicks for all tabs
-    @reactive.effect
-    @reactive.event(input.download_html_custom)
-    async def download_html_custom_clicked():
-        # Include the selected plot type in the suffix for custom downloads
-        plot_type = getattr(input, 'plot_type', lambda: None)()
-        if plot_type:
-            suffix = "custom_" + re.sub(r"\W+", "_", plot_type.strip().lower())
-        else:
-            suffix = "custom"
-        await trigger_html_download(suffix)
-
-    @reactive.effect
-    @reactive.event(input.download_html_histogram)
-    async def download_html_histogram_clicked():
-        await trigger_html_download("histogram")
-
-    @reactive.effect
-    @reactive.event(input.download_html_boxplot)
-    async def download_html_boxplot_clicked():
-        await trigger_html_download("boxplot")
-
-    @reactive.effect
-    @reactive.event(input.download_html_scatter)
-    async def download_html_scatter_clicked():
-        await trigger_html_download("scatter")
-
-    @reactive.effect
-    @reactive.event(input.download_html_barplot)
-    async def download_html_barplot_clicked():
-        await trigger_html_download("barplot")
-
-    @reactive.effect
-    @reactive.event(input.download_html_lineplot)
-    async def download_html_lineplot_clicked():
-        await trigger_html_download("lineplot")
-
-    @reactive.effect
-    @reactive.event(input.download_html_heatmap)
-    async def download_html_heatmap_clicked():
-        await trigger_html_download("heatmap")
-
-    @reactive.effect
-    @reactive.event(input.download_html_multiline)
-    async def download_html_multiline_clicked():
-        await trigger_html_download("multiline")
-
-    @reactive.effect
-    @reactive.event(input.download_html_multilayer)
-    async def download_html_multilayer_clicked():
-        await trigger_html_download("multilayer")
-
-    @reactive.effect
-    @reactive.event(input.download_html_multipanel)
-    async def download_html_multipanel_clicked():
-        await trigger_html_download("multipanel")
-
+    # Handle download button click
     @reactive.effect
     @reactive.event(input.download_html_candlestick)
     async def download_html_candlestick_clicked():
-        await trigger_html_download("candlestick")
+        await trigger_html_download()
 
-    # Add remaining reactive effects and output functions here
-    
-    # Histogram plot rendering
-    @output
-    @render_maidr
-    async def create_histogram_output():
-        """Create and render histogram plot"""
-        try:
-            # Explicitly reference all relevant inputs for reactivity
-            distribution_type = input.distribution_type()
-            hist_color = input.hist_color()
-            theme = input.theme()
-            
-            # Announce plot generation
-            await announce_to_screen_reader(f"Generating {distribution_type.lower()} histogram with {hist_color.lower()} color scheme")
-            
-            ax = create_histogram(distribution_type, hist_color, theme)
-            print(f"create_histogram returned: {type(ax)}, value: {ax}")
-            
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_histogram returned a list instead of axes object: {type(ax)}, length: {len(ax)}")
-                    return None
-                
-                # Check if it has the figure attribute
-                if not hasattr(ax, 'figure'):
-                    print(f"ERROR: create_histogram returned object without figure attribute: {type(ax)}")
-                    return None
-                    
-                fig = ax.figure
-                current_figure.set(fig)
-                print(f"Returning to MAIDR: {type(ax)}, axes object: {ax}")
-                # Return the axes object, not the figure - MAIDR expects the axes
-                return ax
-        except Exception as e:
-            print(f"Error creating histogram: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
-    # Box plot rendering
-    @output
-    @render_maidr
-    def create_boxplot_output():
-        """Create and render box plot"""
-        try:
-            ax = create_boxplot(input.boxplot_type(), input.boxplot_color(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_boxplot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating boxplot: {e}")
-            return None
-    
-    # Scatter plot rendering
-    @output
-    @render_maidr
-    def create_scatterplot_output():
-        """Create and render scatter plot"""
-        try:
-            ax = create_scatterplot(input.scatterplot_type(), input.scatter_color(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_scatterplot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating scatterplot: {e}")
-            return None
-    
-    # Bar plot rendering
-    @output
-    @render_maidr
-    def create_barplot_output():
-        """Create and render bar plot"""
-        try:
-            ax = create_barplot(input.barplot_color(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_barplot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating barplot: {e}")
-            return None
-    
-    # Line plot rendering
-    @output
-    @render_maidr
-    def create_lineplot_output():
-        """Create and render line plot"""
-        try:
-            ax = create_lineplot(input.lineplot_type(), input.lineplot_color(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_lineplot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating lineplot: {e}")
-            return None
-    
-    # Heatmap rendering
-    @output
-    @render_maidr
-    def create_heatmap_output():
-        """Create and render heatmap"""
-        try:
-            ax = create_heatmap(input.heatmap_type(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_heatmap returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating heatmap: {e}")
-            return None
-    
-    # Multiline plot rendering
-    @output
-    @render_maidr
-    def create_multiline_plot_output():
-        """Create and render multiline plot"""
-        try:
-            data = generate_multiline_data(input.multiline_type())
-            multiline_data.set(data)
-            
-            ax = create_multiline_plot(data, input.multiline_type(), input.multiline_color(), input.theme())
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_multiline_plot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating multiline plot: {e}")
-            return None
-    
-    # Multilayer plot rendering
-    @output
-    @render_maidr
-    def create_multilayer_plot_output():
-        """Create and render multilayer plot"""
-        try:
-            ax = create_multilayer_plot(
-                input.multilayer_background_type(), 
-                input.multilayer_background_color(), 
-                input.multilayer_line_color(), 
-                input.theme()
-            )
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_multilayer_plot returned a list instead of axes object: {type(ax)}")
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating multilayer plot: {e}")
-            return None
-    
-    # Multipanel plot rendering
-    @output
-    @render_maidr
-    def create_multipanel_plot_output():
-        """Create and render multipanel plot"""
-        try:
-            ax = create_multipanel_plot("default", "default", input.theme())
-            print(f"create_multipanel_plot returned: {type(ax)}, value: {ax}")
-            
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: create_multipanel_plot returned a list instead of axes object: {type(ax)}, length: {len(ax)}")
-                    return None
-                
-                # Check if it has the figure attribute
-                if not hasattr(ax, 'figure'):
-                    print(f"ERROR: create_multipanel_plot returned object without figure attribute: {type(ax)}")
-                    return None
-                    
-                fig = ax.figure
-                current_figure.set(fig)
-                return ax
-        except Exception as e:
-            print(f"Error creating multipanel plot: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
-    # Candlestick Chart
-    @output
-    @render_maidr 
-    def create_candlestick_output():
-        try:
-            candlestick_company = input.candlestick_company()
-            candlestick_timeframe = input.candlestick_timeframe()
-            theme = input.theme()
-            
-            # Create the candlestick plot
-            ax = create_candlestick(candlestick_company, candlestick_timeframe, theme)
-            
-            if ax is None:
-                return None
-                
-            # Store the current figure for HTML saving using plt.gcf()
-            current_figure.set(plt.gcf())
-            
-            # For MAIDR rendering, return the axes object directly
-            return ax
-            
-        except Exception as e:
-            return None
-
-    # File upload handling
-    @reactive.effect
-    @reactive.event(input.file_upload)
-    async def handle_file_upload():
-        """Handle CSV file upload"""
-        if input.file_upload() is not None:
-            try:
-                file_info = input.file_upload()[0]
-                df = pd.read_csv(file_info["datapath"])
-                uploaded_data.set(df)
-                await announce_to_screen_reader(f"File uploaded successfully with {len(df)} rows and {len(df.columns)} columns")
-            except Exception as e:
-                await announce_to_screen_reader(f"Error uploading file: {str(e)}")
-                print(f"File upload error: {e}")
-
-    # Data types table
-    @output
-    @render.table
-    def data_types():
-        """Display data types of uploaded file"""
-        df = uploaded_data.get()
-        if df is not None:
-            summary = pd.DataFrame({
-                'Column': df.columns,
-                'Type': [str(df[col].dtype) for col in df.columns],
-                'Non-null': [df[col].count() for col in df.columns]
-            })
-            return summary
-        return pd.DataFrame()
-
-    # Plot options dropdown
-    @output
-    @render.ui
-    def plot_options():
-        """Render plot type selection dropdown"""
-        df = uploaded_data.get()
-        if df is not None:
-            return ui.input_select(
-                "plot_type",
-                "Select plot type:",
-                choices=[""] + [
-                    "Histogram",
-                    "Box Plot", 
-                    "Scatter Plot",
-                    "Bar Plot",
-                    "Line Plot",
-                    "Heatmap"
-                ]
-            )
-        return ui.div()
-
-    # Variable input based on plot type
-    @output
-    @render.ui
-    def variable_input():
-        """Render variable selection based on plot type"""
-        df = uploaded_data.get()
-        plot_type = getattr(input, 'plot_type', lambda: None)()
-        
-        if df is not None and plot_type:
-            # Robust dtype detection – numeric vs non-numeric
-            numeric_cols = df.select_dtypes(include='number').columns.tolist()
-            categorical_cols = df.select_dtypes(exclude='number').columns.tolist()
-            
-            if plot_type == "Histogram":
-                return ui.div(
-                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
-                    ui.input_select("hist_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
-                )
-            elif plot_type == "Box Plot":
-                return ui.div(
-                    ui.input_select("var_x", "Select numeric variable:", choices=[""] + numeric_cols),
-                    ui.input_select("var_y", "Select grouping variable (optional):", choices=["None"] + categorical_cols, selected="None"),
-                    ui.input_select("boxplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
-                )
-            elif plot_type == "Scatter Plot":
-                # Provide all numeric columns for both axes (allow same variable)
-                y_choices = numeric_cols
-                return ui.div(
-                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
-                    ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
-                    ui.input_select("scatter_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
-                )
-            elif plot_type == "Bar Plot":
-                return ui.div(
-                    ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
-                    ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
-                )
-            elif plot_type == "Line Plot":
-                # Provide all numeric columns for both axes (allow same variable)
-                y_choices = numeric_cols
-                return ui.div(
-                    ui.input_select("var_x", "Select X variable:", choices=[""] + numeric_cols),
-                    ui.input_select("var_y", "Select Y variable:", choices=[""] + y_choices),
-                    ui.input_select("lineplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
-                )
-            elif plot_type == "Heatmap":
-                return ui.div(
-                    ui.input_select("var_x", "Select X (categorical):", choices=[""] + categorical_cols),
-                    ui.input_select("var_y", "Select Y (categorical):", choices=[""] + categorical_cols),
-                    ui.input_select("var_value", "Select numeric value (optional):", choices=["None"] + numeric_cols, selected="None")
-                )
-        return ui.div()
-
-    # Custom plot creation
-    @output
-    @render_maidr
-    def create_custom_plot():
-        """Create custom plot based on user data and selections"""
-        df = uploaded_data.get()
-        plot_type = getattr(input, 'plot_type', lambda: None)()
-        
-        if df is None or not plot_type or plot_type == "":
-            current_figure.set(None)
-            plot_available.set(False)
-            return None
-            
-        try:
-            ax = None
-            
-            if plot_type == "Histogram" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
-                color = color_palettes.get(getattr(input, 'hist_custom_color', lambda: 'Default')(), 'skyblue')
-                ax = create_custom_histogram(df, input.var_x(), color, input.theme())
-                
-            elif plot_type == "Box Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
-                color = color_palettes.get(getattr(input, 'boxplot_custom_color', lambda: 'Default')(), 'skyblue')
-                var_y = getattr(input, 'var_y', lambda: 'None')()
-                var_y = None if var_y == 'None' or var_y == "" else var_y
-                ax = create_custom_boxplot(df, input.var_x(), var_y, color, input.theme())
-                
-            elif plot_type == "Scatter Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "":
-                color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
-                ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
-                
-            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
-                color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
-                ax = create_custom_barplot(df, input.var_x(), color, input.theme())
-            
-            elif plot_type == "Line Plot" and all(hasattr(input, v) for v in ['var_x','var_y']) and input.var_x() and input.var_y():
-                color = color_palettes.get(getattr(input, 'lineplot_custom_color', lambda: 'Default')(), 'skyblue')
-                ax = create_custom_lineplot(df, input.var_x(), input.var_y(), color, input.theme())
-            
-            elif plot_type == "Heatmap" and all(hasattr(input, v) for v in ['var_x','var_y']):
-                var_x = input.var_x()
-                var_y = input.var_y()
-                var_value = getattr(input, 'var_value', lambda: 'None')()
-                var_value = None if var_value == 'None' or var_value == '' else var_value
-                if var_x and var_y and var_x != '' and var_y != '' and var_x != var_y:
-                    ax = create_custom_heatmap(df, var_x, var_y, var_value, 'YlGnBu', input.theme())
-            
-            if ax is not None:
-                # Check if ax is actually an axes object, not a list
-                if isinstance(ax, list):
-                    print(f"ERROR: Custom plot function returned a list instead of axes object: {type(ax)}")
-                    plot_available.set(False)
-                    return None
-                fig = ax.figure
-                current_figure.set(fig)
-                plot_available.set(True)
-                return ax
-                
-        except Exception as e:
-            print(f"Error creating custom plot: {e}")
-            plot_available.set(False)
-            return None
-
-    # Generic SVG download handler and per-tab triggers
-    async def trigger_svg_download(plot_type_suffix):
+    # Generic SVG download handler
+    async def trigger_svg_download():
         """Generate SVG in-memory and send to browser for download."""
         try:
             fig = current_figure.get()
@@ -1980,23 +1199,17 @@ def server(input, output, session):
                 await session.send_custom_message("show_alert", {"type":"warning", "message":"No plot available. Please generate a plot before creating embed code."})
                 return
 
-            import io, codecs
+            import io
             buffer = io.StringIO()
             fig.savefig(buffer, format='svg', bbox_inches='tight')
             svg_content = buffer.getvalue()
             buffer.close()
 
-            # Generate filename using new scheme: titleofplot_plottype_timestamp
-            plot_title = "plot"
-            try:
-                if fig and fig.get_axes():
-                    title_text = fig.get_axes()[0].get_title()
-                    if title_text:
-                        plot_title = re.sub(r"\W+", "_", title_text.strip()).strip("_")
-            except Exception:
-                pass
+            # Generate filename
+            company = input.candlestick_company()
+            timeframe = input.candlestick_timeframe()
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{plot_title}_{plot_type_suffix}_{timestamp}.svg"
+            filename = f"{company}_{timeframe}_candlestick_{timestamp}.svg"
 
             # Send to browser
             await session.send_custom_message("download_file", {
@@ -2011,112 +1224,11 @@ def server(input, output, session):
             await announce_to_screen_reader(f"Error preparing graphics file: {str(e)}")
             print(f"SVG creation error: {e}")
 
-    # Download Graphics button events for all tabs
-    @reactive.effect
-    @reactive.event(input.download_graphics_custom)
-    async def download_graphics_custom_clicked():
-        plot_type = getattr(input, 'plot_type', lambda: None)()
-        if plot_type:
-            suffix = "custom_" + re.sub(r"\W+", "_", plot_type.strip().lower())
-        else:
-            suffix = "custom"
-        await trigger_svg_download(suffix)
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_histogram)
-    async def download_graphics_histogram_clicked():
-        await trigger_svg_download("histogram")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_boxplot)
-    async def download_graphics_boxplot_clicked():
-        await trigger_svg_download("boxplot")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_scatter)
-    async def download_graphics_scatter_clicked():
-        await trigger_svg_download("scatter")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_barplot)
-    async def download_graphics_barplot_clicked():
-        await trigger_svg_download("barplot")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_lineplot)
-    async def download_graphics_lineplot_clicked():
-        await trigger_svg_download("lineplot")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_heatmap)
-    async def download_graphics_heatmap_clicked():
-        await trigger_svg_download("heatmap")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_multilayer)
-    async def download_graphics_multilayer_clicked():
-        await trigger_svg_download("multilayer")
-
-    @reactive.effect
-    @reactive.event(input.download_graphics_multipanel)
-    async def download_graphics_multipanel_clicked():
-        await trigger_svg_download("multipanel")
-
+    # Download Graphics button event
     @reactive.effect
     @reactive.event(input.download_graphics_candlestick)
     async def download_graphics_candlestick_clicked():
-        await trigger_svg_download("candlestick")
-
-    # Add reactive effects to announce changes to screen readers
-    @reactive.effect
-    async def announce_plot_type_change():
-        try:
-            if uploaded_data.get() is not None and hasattr(input, 'plot_type') and input.plot_type() and input.plot_type() != "":
-                plot_type = input.plot_type()
-                await announce_to_screen_reader(f"Plot type changed to {plot_type}. Please select appropriate variables for this plot type.")
-        except:
-            pass
-    
-    @reactive.effect
-    async def announce_histogram_changes():
-        distribution_type = input.distribution_type()
-        hist_color = input.hist_color()
-        if distribution_type and hist_color:
-            await announce_to_screen_reader(f"Histogram settings updated: {distribution_type} distribution with {hist_color} colors")
-
-    @reactive.effect
-    async def announce_boxplot_changes():
-        boxplot_type = input.boxplot_type()
-        boxplot_color = input.boxplot_color()
-        if boxplot_type and boxplot_color:
-            await announce_to_screen_reader(f"Box plot settings updated: {boxplot_type} with {boxplot_color} colors")
-
-    @reactive.effect
-    async def announce_scatter_changes():
-        scatterplot_type = input.scatterplot_type()
-        scatter_color = input.scatter_color()
-        if scatterplot_type and scatter_color:
-            await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
-
-    # Add reactive effect to update button states
-    @reactive.effect
-    def update_custom_plot_buttons():
-        """Update the enabled state of custom plot buttons based on plot availability"""
-        is_plot_available = plot_available.get()
-        
-        # Update button states
-        ui.update_action_button(
-            "download_graphics_custom",
-            disabled=not is_plot_available
-        )
-        ui.update_action_button(
-            "download_html_custom",
-            disabled=not is_plot_available
-        )
-        ui.update_action_button(
-            "embed_code_button_custom",
-            disabled=not is_plot_available
-        )
+        await trigger_svg_download()
 
 # Function to extract embed content from full HTML
 def extract_embed_content(html_content):
@@ -2131,13 +1243,11 @@ def extract_embed_content(html_content):
         body_content = body_match.group(1).strip()
     else:
         # Fallback: try to find the main div with MAIDR content
-        # Look for the div that contains the link and script
         div_match = re.search(r'(<div[^>]*>.*?<link.*?maidr.*?<script.*?</script>.*?<div.*?</div>\s*</div>)', html_content, re.DOTALL | re.IGNORECASE)
         
         if div_match:
             body_content = div_match.group(1).strip()
         else:
-            # If we can't parse it properly, return an error message
             return "<!-- Error: Could not extract embed content from generated HTML -->"
     
     # Create a complete HTML document for the iframe
@@ -2156,17 +1266,15 @@ def extract_embed_content(html_content):
     escaped_html = html.escape(iframe_html, quote=True)
     
     # Create iframe with sandbox attributes for security
-    # Allow scripts and same-origin for MAIDR functionality while maintaining security
     iframe_embed = f'''<iframe 
     srcdoc="{escaped_html}"
     style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 4px;"
     sandbox="allow-scripts allow-same-origin"
-    title="Accessible Interactive Plot with MAIDR">
+    title="Accessible Interactive Candlestick Chart with MAIDR">
 </iframe>'''
     
     return iframe_embed
 
 # Create the Shiny app
 static_img_dir = Path(__file__).parent / "img"
-# The mount point must start with '/' so that Starlette accepts it
 app = App(app_ui, server, static_assets={"/img": static_img_dir})

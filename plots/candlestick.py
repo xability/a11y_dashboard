@@ -340,6 +340,429 @@ def aggregate_data_by_timeframe(data: Dict[str, List], timeframe: str) -> Dict[s
     
     return aggregated_data
 
+def create_tutorial_candlestick_basics(theme="Light"):
+    """
+    Create a simple candlestick chart showing basic bullish and bearish candles
+    for Module 1: Understanding the Building Blocks
+    """
+    if MPLFINANCE_AVAILABLE:
+        # Create a simple 5-day dataset with clear bullish and bearish examples
+        dates = pd.date_range(start='2024-01-01', periods=5, freq='D')
+        
+        # Craft specific OHLC data to show bullish and bearish candles clearly
+        data = {
+            'Open': [100.0, 102.0, 104.0, 103.0, 101.0],
+            'High': [101.5, 105.0, 106.0, 104.5, 103.0],
+            'Low': [99.5, 101.0, 103.0, 100.0, 100.0],
+            'Close': [102.0, 104.0, 105.0, 101.0, 102.5],
+            'Volume': [1000000, 1200000, 1100000, 1300000, 1000000]
+        }
+        
+        mpf_df = pd.DataFrame(data, index=dates)
+        
+        # Choose style based on theme
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+        
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(3,),  # Simple 3-period moving average
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title="Basic Candlestick Patterns: Bullish vs Bearish Candles",
+        )
+        
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+        
+        return primary_ax
+    else:
+        # Fallback implementation
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_plot_theme(fig, ax, theme)
+        ax.text(0.5, 0.5, "Tutorial: Basic Candlestick Patterns\n(mplfinance required)", 
+                ha='center', va='center', transform=ax.transAxes)
+        return ax
+
+def create_tutorial_trends_volatility(theme="Light"):
+    """
+    Create candlestick chart showing uptrend, downtrend, and volatility patterns
+    for Module 2: Reading the Market's Story
+    This version forces the last 5 candles to be bearish and the moving average to slope down.
+    """
+    if MPLFINANCE_AVAILABLE:
+        # Create 20-day dataset showing uptrend, then downtrend, then strong bearish finish
+        dates = pd.date_range(start='2024-01-01', periods=20, freq='D')
+        
+        base_price = 100.0
+        opens = []
+        highs = []
+        lows = []
+        closes = []
+        volumes = []
+        
+        for i in range(20):
+            if i < 7:  # Uptrend
+                trend_factor = 1.02 + (i * 0.01)
+                volatility = 0.5
+            elif i < 12:  # Downtrend
+                trend_factor = 0.98 - ((i-7) * 0.01)
+                volatility = 0.7
+            elif i < 15:  # High volatility sideways
+                trend_factor = 1.0
+                volatility = 2.0
+            else:  # Force strong bearish finish
+                # Each day, open is previous close, close is much lower
+                trend_factor = 0.95  # Strong drop
+                volatility = 0.3
+            
+            if i == 0:
+                opens.append(base_price)
+            else:
+                opens.append(closes[i-1])
+            
+            if i < 15:
+                close = opens[i] * trend_factor + np.random.normal(0, volatility)
+            else:
+                # Force close to be much lower than open for last 5 candles
+                close = opens[i] - abs(np.random.normal(2, 0.5)) - 2
+            closes.append(close)
+            
+            high = max(opens[i], close) + abs(np.random.normal(0, volatility))
+            low = min(opens[i], close) - abs(np.random.normal(0, volatility))
+            highs.append(high)
+            lows.append(low)
+            
+            # Volume increases with volatility
+            if i >= 15:
+                vol_multiplier = 2.0
+            else:
+                vol_multiplier = 1.0 + (volatility / 2.0)
+            volumes.append(int(1000000 * vol_multiplier))
+        
+        data = {
+            'Open': opens,
+            'High': highs,
+            'Low': lows,
+            'Close': closes,
+            'Volume': volumes
+        }
+        
+        mpf_df = pd.DataFrame(data, index=dates)
+        
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+        
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(5, 10),  # Moving averages to show trend
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title="Market Trends: Uptrend → Downtrend → Strong Bearish Finish",
+        )
+        
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+        
+        return primary_ax
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_plot_theme(fig, ax, theme)
+        ax.text(0.5, 0.5, "Tutorial: Trends and Volatility\n(mplfinance required)", 
+                ha='center', va='center', transform=ax.transAxes)
+        return ax
+
+def create_tutorial_reversal_breakout(theme="Light"):
+    """
+    Create candlestick chart showing reversal and breakout patterns
+    for Module 3: Basic Trading Concepts
+    """
+    if MPLFINANCE_AVAILABLE:
+        # Create 15-day dataset showing reversal and breakout
+        dates = pd.date_range(start='2024-01-01', periods=15, freq='D')
+        
+        # Craft data to show downtrend, reversal, then breakout
+        opens = []
+        highs = []
+        lows = []
+        closes = []
+        volumes = []
+        
+        base_price = 110.0
+        
+        for i in range(15):
+            if i < 6:  # Downtrend
+                trend_factor = 0.98 - (i * 0.005)
+                volatility = 0.8
+            elif i < 9:  # Reversal formation
+                trend_factor = 1.001 + (i-6) * 0.002
+                volatility = 1.2
+            else:  # Breakout upward
+                trend_factor = 1.03 + (i-9) * 0.01
+                volatility = 0.6
+            
+            if i == 0:
+                opens.append(base_price)
+            else:
+                opens.append(closes[i-1])
+            
+            close = opens[i] * trend_factor + np.random.normal(0, volatility)
+            closes.append(close)
+            
+            high = max(opens[i], close) + abs(np.random.normal(0, volatility))
+            low = min(opens[i], close) - abs(np.random.normal(0, volatility))
+            
+            highs.append(high)
+            lows.append(low)
+            
+            # Volume increases during reversal and breakout
+            if 6 <= i <= 9:  # Reversal period
+                vol_multiplier = 1.5
+            elif i >= 10:  # Breakout period
+                vol_multiplier = 2.0
+            else:
+                vol_multiplier = 1.0
+                
+            volumes.append(int(1000000 * vol_multiplier))
+        
+        data = {
+            'Open': opens,
+            'High': highs,
+            'Low': lows,
+            'Close': closes,
+            'Volume': volumes
+        }
+        
+        mpf_df = pd.DataFrame(data, index=dates)
+        
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+        
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(5, 10),
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title="Reversal and Breakout Pattern",
+        )
+        
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+        
+        return primary_ax
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_plot_theme(fig, ax, theme)
+        ax.text(0.5, 0.5, "Tutorial: Reversal and Breakout\n(mplfinance required)", 
+                ha='center', va='center', transform=ax.transAxes)
+        return ax
+
+def create_tutorial_hammer_pattern(theme="Light"):
+    """
+    Create candlestick chart showing hammer reversal pattern
+    for Module 4: Basic Trading Strategies - Hammer
+    """
+    if MPLFINANCE_AVAILABLE:
+        # Create 10-day dataset with clear hammer pattern
+        dates = pd.date_range(start='2024-01-01', periods=10, freq='D')
+        
+        opens = []
+        highs = []
+        lows = []
+        closes = []
+        volumes = []
+        
+        base_price = 100.0
+        
+        for i in range(10):
+            if i < 6:  # Downtrend leading to hammer
+                trend_factor = 0.97 - (i * 0.01)
+                volatility = 0.5
+            elif i == 6:  # Hammer day
+                # Hammer: small body at top, long lower wick
+                opens.append(closes[i-1] if i > 0 else base_price * 0.9)
+                closes.append(opens[i] + 0.5)  # Small body
+                lows.append(opens[i] - 3.0)  # Long lower wick
+                highs.append(opens[i] + 0.8)  # Small upper wick
+                volumes.append(1500000)  # High volume
+                continue
+            else:  # Confirmation and recovery
+                trend_factor = 1.02 + (i-7) * 0.01
+                volatility = 0.8
+            
+            if i == 0:
+                opens.append(base_price)
+            elif i != 6:
+                opens.append(closes[i-1])
+            
+            if i != 6:
+                close = opens[i] * trend_factor + np.random.normal(0, volatility)
+                closes.append(close)
+                
+                high = max(opens[i], close) + abs(np.random.normal(0, volatility))
+                low = min(opens[i], close) - abs(np.random.normal(0, volatility))
+                
+                highs.append(high)
+                lows.append(low)
+                
+                vol_multiplier = 1.2 if i > 6 else 1.0
+                volumes.append(int(1000000 * vol_multiplier))
+        
+        data = {
+            'Open': opens,
+            'High': highs,
+            'Low': lows,
+            'Close': closes,
+            'Volume': volumes
+        }
+        
+        mpf_df = pd.DataFrame(data, index=dates)
+        
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+        
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(5,),
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title="Hammer Reversal Pattern (Day 7)",
+        )
+        
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+        
+        return primary_ax
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_plot_theme(fig, ax, theme)
+        ax.text(0.5, 0.5, "Tutorial: Hammer Reversal Pattern\n(mplfinance required)", 
+                ha='center', va='center', transform=ax.transAxes)
+        return ax
+
+def create_tutorial_shooting_star_pattern(theme="Light"):
+    """
+    Create candlestick chart showing shooting star reversal pattern
+    for Module 4: Basic Trading Strategies - Shooting Star
+    """
+    if MPLFINANCE_AVAILABLE:
+        # Create 10-day dataset with clear shooting star pattern
+        dates = pd.date_range(start='2024-01-01', periods=10, freq='D')
+        
+        opens = []
+        highs = []
+        lows = []
+        closes = []
+        volumes = []
+        
+        base_price = 100.0
+        
+        for i in range(10):
+            if i < 6:  # Uptrend leading to shooting star
+                trend_factor = 1.02 + (i * 0.01)
+                volatility = 0.5
+            elif i == 6:  # Shooting star day
+                # Shooting star: small body at bottom, long upper wick
+                opens.append(closes[i-1] if i > 0 else base_price * 1.1)
+                closes.append(opens[i] - 0.5)  # Small body (bearish)
+                highs.append(opens[i] + 3.0)  # Long upper wick
+                lows.append(opens[i] - 0.8)  # Small lower wick
+                volumes.append(1500000)  # High volume
+                continue
+            else:  # Confirmation and decline
+                trend_factor = 0.98 - (i-7) * 0.01
+                volatility = 0.8
+            
+            if i == 0:
+                opens.append(base_price)
+            elif i != 6:
+                opens.append(closes[i-1])
+            
+            if i != 6:
+                close = opens[i] * trend_factor + np.random.normal(0, volatility)
+                closes.append(close)
+                
+                high = max(opens[i], close) + abs(np.random.normal(0, volatility))
+                low = min(opens[i], close) - abs(np.random.normal(0, volatility))
+                
+                highs.append(high)
+                lows.append(low)
+                
+                vol_multiplier = 1.2 if i > 6 else 1.0
+                volumes.append(int(1000000 * vol_multiplier))
+        
+        data = {
+            'Open': opens,
+            'High': highs,
+            'Low': lows,
+            'Close': closes,
+            'Volume': volumes
+        }
+        
+        mpf_df = pd.DataFrame(data, index=dates)
+        
+        if theme == "Dark":
+            mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
+        else:
+            mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
+        
+        fig, axes = mpf.plot(
+            mpf_df,
+            type="candle",
+            mav=(5,),
+            volume=True,
+            returnfig=True,
+            style=mpf_style,
+            ylabel="Price ($)",
+            ylabel_lower="Volume",
+            xlabel="Date",
+            title="Shooting Star Reversal Pattern (Day 7)",
+        )
+        
+        primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
+        set_plot_theme(fig, primary_ax, theme)
+        fig.tight_layout()
+        
+        return primary_ax
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        set_plot_theme(fig, ax, theme)
+        ax.text(0.5, 0.5, "Tutorial: Shooting Star Reversal Pattern\n(mplfinance required)", 
+                ha='center', va='center', transform=ax.transAxes)
+        return ax
+
 def create_candlestick(company, timeframe, theme):
     """
     Create a candlestick plot based on company selection, timeframe, and theme.
