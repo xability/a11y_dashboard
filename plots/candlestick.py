@@ -345,27 +345,25 @@ def create_tutorial_candlestick_basics(theme="Light"):
     Create a simple candlestick chart showing basic bullish and bearish candles
     for Module 1: Understanding the Building Blocks
     """
+    import pandas as pd
+    import os
     if MPLFINANCE_AVAILABLE:
-        # Create a simple 5-day dataset with clear bullish and bearish examples
-        dates = pd.date_range(start='2024-01-01', periods=5, freq='D')
-        
-        # Craft specific OHLC data to show bullish and bearish candles clearly
-        data = {
-            'Open': [100.0, 102.0, 104.0, 103.0, 101.0],
-            'High': [101.5, 105.0, 106.0, 104.5, 103.0],
-            'Low': [99.5, 101.0, 103.0, 100.0, 100.0],
-            'Close': [102.0, 104.0, 105.0, 101.0, 102.5],
-            'Volume': [1000000, 1200000, 1100000, 1300000, 1000000]
-        }
-        
-        mpf_df = pd.DataFrame(data, index=dates)
-        
+        # Load sample data from CSV
+        csv_path = os.path.join(os.path.dirname(__file__), '../sample_data/sample_candlestick.csv')
+        df = pd.read_csv(csv_path, parse_dates=['Date'])
+        df = df.sort_values('Date')
+        df = df.set_index('Date')
+        # Ensure correct dtypes
+        for col in ['Open', 'High', 'Low', 'Close']:
+            df[col] = df[col].astype(float)
+        df['Volume'] = df['Volume'].astype(int)
+        # Use only the first 5 rows for the tutorial
+        mpf_df = df.iloc[:5]
         # Choose style based on theme
         if theme == "Dark":
             mpf_style = mpf.make_mpf_style(base_mpf_style="nightclouds", rc={"axes.grid": True})
         else:
             mpf_style = mpf.make_mpf_style(base_mpf_style="yahoo", rc={"axes.grid": True})
-        
         fig, axes = mpf.plot(
             mpf_df,
             type="candle",
@@ -378,11 +376,9 @@ def create_tutorial_candlestick_basics(theme="Light"):
             xlabel="Date",
             title="Basic Candlestick Patterns: Bullish vs Bearish Candles",
         )
-        
         primary_ax = axes[0] if isinstance(axes, (list, tuple)) and len(axes) > 0 else axes
         set_plot_theme(fig, primary_ax, theme)
         fig.tight_layout()
-        
         return primary_ax
     else:
         # Fallback implementation
@@ -773,17 +769,27 @@ def create_candlestick(company, timeframe, theme):
     When MAIDR is working, you can uncomment the @render_maidr decorator 
     and comment out the manual SVG rendering in app.py.
     """
-    # Generate data for the selected company
-    if timeframe == "Yearly":
-        # Generate multiple years of data for yearly view
-        data = generate_stock_data(
-            company=company,
-            start_date="2018-01-01", 
-            end_date="2023-12-31",
-            seed=42
-        )
+    import pandas as pd
+    import os
+    # For 'Daily' timeframe, load from CSV
+    if timeframe == "Daily":
+        csv_path = os.path.join(os.path.dirname(__file__), '../sample_data/sample_candlestick.csv')
+        df = pd.read_csv(csv_path, parse_dates=['Date'])
+        df = df.sort_values('Date')
+        df = df.set_index('Date')
+        for col in ['Open', 'High', 'Low', 'Close']:
+            df[col] = df[col].astype(float)
+        df['Volume'] = df['Volume'].astype(int)
+        data = {
+            'Date': df.index.strftime('%Y-%m-%d').tolist(),
+            'Open': df['Open'].tolist(),
+            'High': df['High'].tolist(),
+            'Low': df['Low'].tolist(),
+            'Close': df['Close'].tolist(),
+            'Volume': df['Volume'].tolist(),
+        }
     else:
-        # Use one year of data for daily and monthly views
+        # Use one year of data for monthly/yearly views (keep old logic)
         data = generate_stock_data(
             company=company,
             start_date="2023-01-01", 
