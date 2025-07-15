@@ -741,7 +741,7 @@ app_ui = ui.page_fluid(
                 ui.div(
                     ui.input_action_button(
                         "help_button",
-                        "\ud83d\udcda Help (h)",
+                        "Help (h)",
                         class_="btn btn-info",
                         title="Open help menu - keyboard shortcut: press 'h'"
                     ),
