@@ -145,7 +145,6 @@ from plots.heatmap import create_heatmap, create_custom_heatmap
 from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
 from plots.multilayerplot import create_multilayer_plot, create_custom_multilayer_plot
 from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
-from plots.candlestick import create_candlestick
 
 # Import help menu module
 from HelpMenu import get_help_modal, QUICK_HELP_TIPS
@@ -1170,57 +1169,6 @@ app_ui = ui.page_fluid(
                 ui.output_ui("create_multipanel_plot_output")
             )
         ),
-        # Candlestick Chart Tab
-        ui.nav_panel(
-            "Candlestick Chart",
-            ui.input_select(
-                "candlestick_company",
-                "Select company:",
-                choices=[
-                    "Tesla",
-                    "Apple", 
-                    "NVIDIA",
-                    "Microsoft",
-                    "Google",
-                    "Amazon",
-                ],
-                selected="Tesla",
-            ),
-            ui.input_select(
-                "candlestick_timeframe",
-                "Select timeframe:",
-                choices=[
-                    "Daily",
-                    "Monthly",
-                    "Yearly",
-                ],
-                selected="Daily",
-            ),
-            ui.tags.main(
-                {"role": "main", "aria-label": "Main content"},
-                ui.div(
-                    ui.input_action_button(
-                        "download_graphics_candlestick",
-                        "Download Graph in svg",
-                        class_="btn btn-primary",
-                    ),
-                    ui.input_action_button(
-                        "download_html_candlestick",
-                        "Download Multimodal Plot in html",
-                        class_="btn btn-secondary",
-                    ),
-                    ui.input_action_button(
-                        "embed_code_button_candlestick",
-                        "Embed Code",
-                        class_="btn btn-success",
-                        aria_label="Get embed code for your website",
-                    ),
-                    class_="text-center mb-3",
-                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"
-                ),
-                ui.output_ui("create_candlestick_output")
-            )
-        ),
     ),
     # Footer
     ui.tags.footer(
@@ -1384,10 +1332,8 @@ def server(input, output, session):
     async def embed_code_button_multipanel_clicked():
         await handle_embed_code_generation()
 
-    @reactive.effect
-    @reactive.event(input.embed_code_button_candlestick)
-    async def embed_code_button_candlestick_clicked():
-        await handle_embed_code_generation()
+    
+    
 
     # Store embed code content
     embed_code_content = reactive.Value("")
@@ -1552,10 +1498,8 @@ def server(input, output, session):
     async def download_html_multipanel_clicked():
         await trigger_html_download("multipanel")
 
-    @reactive.effect
-    @reactive.event(input.download_html_candlestick)
-    async def download_html_candlestick_clicked():
-        await trigger_html_download("candlestick")
+    
+    
 
     # Add remaining reactive effects and output functions here
     
@@ -1768,29 +1712,7 @@ def server(input, output, session):
             traceback.print_exc()
             return None
     
-    # Candlestick Chart
-    @output
-    @render_maidr 
-    def create_candlestick_output():
-        try:
-            candlestick_company = input.candlestick_company()
-            candlestick_timeframe = input.candlestick_timeframe()
-            theme = input.theme()
-            
-            # Create the candlestick plot
-            ax = create_candlestick(candlestick_company, candlestick_timeframe, theme)
-            
-            if ax is None:
-                return None
-                
-            # Store the current figure for HTML saving using plt.gcf()
-            current_figure.set(plt.gcf())
-            
-            # For MAIDR rendering, return the axes object directly
-            return ax
-            
-        except Exception as e:
-            return None
+    
 
     # File upload handling
     @reactive.effect
@@ -2052,10 +1974,8 @@ def server(input, output, session):
     async def download_graphics_multipanel_clicked():
         await trigger_svg_download("multipanel")
 
-    @reactive.effect
-    @reactive.event(input.download_graphics_candlestick)
-    async def download_graphics_candlestick_clicked():
-        await trigger_svg_download("candlestick")
+    
+    
 
     # Add reactive effects to announce changes to screen readers
     @reactive.effect
