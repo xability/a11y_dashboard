@@ -1,0 +1,28 @@
+{
+  "filename": "boxplot_dataset/boxplot_0166.png",
+  "vertical": false,
+  "n_groups": 1,
+  "showfliers": false,
+  "notch": false,
+  "showmeans": true,
+  "whis": "1.5",
+  "widths": 0.5523855145564485,
+  "xlabel": "Category",
+  "ylabel": "Value",
+  "title": "Random Boxplot 0166",
+  "generated_at": "2026-01-23T18:40:40.190264Z",
+  "stats_per_group": [
+    {
+      "min": -7.5979282903404926,
+      "q1": -4.455929479966823,
+      "median": -2.5785300816080046,
+      "q3": 1.0562698079251192,
+      "max": 4.367955345352227,
+      "iqr": 5.512199287891942,
+      "whis_low": -7.5979282903404926,
+      "whis_high": 4.367955345352227,
+      "mean": -1.9592247114189614,
+      "outliers": []
+    }
+  ]
+}
