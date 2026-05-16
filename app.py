@@ -139,7 +139,7 @@ def save_html_utf8(fig, filepath):
         sys.stderr = old_stderr
 
 from plots.scatterplot import create_scatterplot, create_custom_scatterplot
-from plots.barplot import create_barplot, create_custom_barplot
+from plots.barplot import create_barplot, create_custom_barplot, create_custom_countplot
 from plots.lineplot import create_lineplot, create_custom_lineplot
 from plots.heatmap import create_heatmap, create_custom_heatmap
 from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
@@ -757,6 +757,23 @@ app_ui = ui.page_fluid(
                     ui.column(
                         2,
                         ui.input_file("file_upload", "Upload CSV File", accept=".csv"),
+                        ui.tags.p(
+                            ui.tags.strong("— or paste data below —"),
+                            style="text-align:center; margin: 6px 0 2px 0; font-size: 0.85em; color: #666;"
+                        ),
+                        ui.input_text_area(
+                            "paste_data",
+                            "Paste TSV/CSV (e.g. from Excel or Google Sheets):",
+                            rows=6,
+                            placeholder="Paste tab- or comma-separated data here, including a header row…",
+                            resize="vertical",
+                        ),
+                        ui.input_action_button(
+                            "load_paste_data",
+                            "Load Pasted Data",
+                            class_="btn btn-outline-primary btn-sm w-100",
+                        ),
+                        ui.output_ui("paste_data_status"),
                         ui.output_table("data_types"),
                         ui.output_ui("plot_options"),
                         ui.output_ui("variable_input"),
@@ -1724,10 +1741,52 @@ def server(input, output, session):
                 file_info = input.file_upload()[0]
                 df = pd.read_csv(file_info["datapath"])
                 uploaded_data.set(df)
+                paste_data_message.set(None)
                 await announce_to_screen_reader(f"File uploaded successfully with {len(df)} rows and {len(df.columns)} columns")
             except Exception as e:
                 await announce_to_screen_reader(f"Error uploading file: {str(e)}")
                 print(f"File upload error: {e}")
+
+    # Reactive value to hold paste status message
+    paste_data_message = reactive.Value(None)
+
+    # TSV/CSV paste handler
+    @reactive.effect
+    @reactive.event(input.load_paste_data)
+    async def handle_paste_data():
+        """Parse pasted TSV/CSV text (e.g. copied from Excel or Google Sheets)."""
+        raw = (input.paste_data() or "").strip()
+        if not raw:
+            paste_data_message.set(("warning", "Please paste some data before clicking Load."))
+            return
+        try:
+            import io
+            # Auto-detect delimiter: prefer tab (Excel/Sheets default), fall back to comma
+            delimiter = "\t" if "\t" in raw else ","
+            df = pd.read_csv(io.StringIO(raw), sep=delimiter)
+            if df.empty or len(df.columns) < 1:
+                raise ValueError("Parsed table is empty or has no columns.")
+            uploaded_data.set(df)
+            paste_data_message.set(("success", f"Data loaded: {len(df)} rows × {len(df.columns)} columns."))
+            await announce_to_screen_reader(
+                f"Pasted data loaded successfully with {len(df)} rows and {len(df.columns)} columns"
+            )
+        except Exception as e:
+            paste_data_message.set(("danger", f"Could not parse pasted data: {e}"))
+            await announce_to_screen_reader(f"Error parsing pasted data: {e}")
+
+    @output
+    @render.ui
+    def paste_data_status():
+        """Show a small status badge after the user loads pasted data."""
+        msg = paste_data_message.get()
+        if msg is None:
+            return ui.div()
+        level, text = msg
+        return ui.div(
+            ui.tags.small(text, class_=f"text-{level}"),
+            style="margin: 4px 0 8px 0;"
+        )
 
     # Data types table
     @output
@@ -1759,6 +1818,7 @@ def server(input, output, session):
                     "Box Plot", 
                     "Scatter Plot",
                     "Bar Plot",
+                    "Count Plot",
                     "Line Plot",
                     "Heatmap"
                 ]
@@ -1799,8 +1859,18 @@ def server(input, output, session):
                 )
             elif plot_type == "Bar Plot":
                 return ui.div(
-                    ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
+                    ui.input_select("var_x", "Select category variable (X):", choices=[""] + categorical_cols),
+                    ui.input_select("var_y", "Select value variable (Y):", choices=[""] + numeric_cols),
                     ui.input_select("barplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
+                )
+            elif plot_type == "Count Plot":
+                return ui.div(
+                    ui.tags.p(
+                        "Count Plot counts how often each category appears in the selected column — no pre-aggregated values needed.",
+                        style="font-size:0.82em; color:#555; margin-bottom:6px;"
+                    ),
+                    ui.input_select("var_x", "Select categorical variable:", choices=[""] + categorical_cols),
+                    ui.input_select("countplot_custom_color", "Select color:", choices=list(color_palettes.keys()), selected="Default")
                 )
             elif plot_type == "Line Plot":
                 # Provide all numeric columns for both axes (allow same variable)
@@ -1848,9 +1918,13 @@ def server(input, output, session):
                 color = color_palettes.get(getattr(input, 'scatter_custom_color', lambda: 'Default')(), 'skyblue')
                 ax = create_custom_scatterplot(df, input.var_x(), input.var_y(), color, input.theme())
                 
-            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
+            elif plot_type == "Bar Plot" and hasattr(input, 'var_x') and hasattr(input, 'var_y') and input.var_x() and input.var_y() and input.var_x() != "" and input.var_y() != "":
                 color = color_palettes.get(getattr(input, 'barplot_custom_color', lambda: 'Default')(), 'skyblue')
-                ax = create_custom_barplot(df, input.var_x(), color, input.theme())
+                ax = create_custom_barplot(df, input.var_x(), input.var_y(), color, input.theme())
+
+            elif plot_type == "Count Plot" and hasattr(input, 'var_x') and input.var_x() and input.var_x() != "":
+                color = color_palettes.get(getattr(input, 'countplot_custom_color', lambda: 'Default')(), 'skyblue')
+                ax = create_custom_countplot(df, input.var_x(), color, input.theme())
             
             elif plot_type == "Line Plot" and all(hasattr(input, v) for v in ['var_x','var_y']) and input.var_x() and input.var_y():
                 color = color_palettes.get(getattr(input, 'lineplot_custom_color', lambda: 'Default')(), 'skyblue')
