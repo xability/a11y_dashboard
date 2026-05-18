@@ -1210,9 +1210,11 @@ def server(input, output, session):
     current_maidr = reactive.Value(None)
     # Add reactive value to store if a plot is available
     plot_available = reactive.Value(False)
-    
     # Reactive value to store the last saved file path
     last_saved_file = reactive.Value(None)
+    # Reactive value to hold paste-data status message (must be declared early
+    # because handle_file_upload references it to clear the message on file upload)
+    paste_data_message = reactive.Value(None)
 
     # Helper function to announce messages to screen readers
     async def announce_to_screen_reader(message):
@@ -1747,23 +1749,20 @@ def server(input, output, session):
                 await announce_to_screen_reader(f"Error uploading file: {str(e)}")
                 print(f"File upload error: {e}")
 
-    # Reactive value to hold paste status message
-    paste_data_message = reactive.Value(None)
-
     # TSV/CSV paste handler
     @reactive.effect
     @reactive.event(input.load_paste_data)
     async def handle_paste_data():
         """Parse pasted TSV/CSV text (e.g. copied from Excel or Google Sheets)."""
+        import io as _io
         raw = (input.paste_data() or "").strip()
         if not raw:
             paste_data_message.set(("warning", "Please paste some data before clicking Load."))
             return
+        # Auto-detect delimiter: prefer tab (Excel/Sheets default), fall back to comma
+        delimiter = "\t" if "\t" in raw else ","
         try:
-            import io
-            # Auto-detect delimiter: prefer tab (Excel/Sheets default), fall back to comma
-            delimiter = "\t" if "\t" in raw else ","
-            df = pd.read_csv(io.StringIO(raw), sep=delimiter)
+            df = pd.read_csv(_io.StringIO(raw), sep=delimiter)
             if df.empty or len(df.columns) < 1:
                 raise ValueError("Parsed table is empty or has no columns.")
             uploaded_data.set(df)
