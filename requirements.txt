@@ -8,3 +8,4 @@ htmltools
 wrapt
 statsmodels
 jinja2
+yfinance

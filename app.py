@@ -10,7 +10,7 @@ from matplotlib.backends.backend_svg import FigureCanvasSVG
 from maidr.widget.shiny import render_maidr
 import maidr
 from shiny import App, reactive, render, ui
-from shiny.types import FileInfo
+from shiny.types import FileInfo, SilentException
 import datetime
 import re
 
@@ -70,7 +70,7 @@ def save_html_utf8(fig, filepath):
                 
                 try:
                     # Try to save directly with monkey-patched open
-                    maidr.save_html(fig, temp_path)
+                    maidr.save_html(fig, file=temp_path)
                     
                     # Verify the file was created and has content
                     if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
@@ -92,7 +92,7 @@ def save_html_utf8(fig, filepath):
                     
                     try:
                         # Let maidr save however it wants to the fallback path
-                        maidr.save_html(fig, temp_path_fallback)
+                        maidr.save_html(fig, file=temp_path_fallback)
                         
                         # Read the file and re-encode as UTF-8
                         # Try multiple encodings to read the file
@@ -145,6 +145,46 @@ from plots.heatmap import create_heatmap, create_custom_heatmap
 from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
 from plots.multilayerplot import create_multilayer_plot, create_custom_multilayer_plot
 from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
+from plots.candlestick import (
+    create_candlestick,
+    parse_month,
+    parse_year,
+    parse_day,
+    CANDLESTICK_COMPANIES,
+    CANDLESTICK_TIMEFRAMES,
+    CANDLESTICK_YEARS,
+    get_available_month_names,
+    get_default_month_for_year,
+    build_hourly_day_choices,
+    get_hourly_day_default,
+    CURRENT_YEAR,
+    CURRENT_MONTH,
+    TODAY,
+    _anniversary_on_year,
+    YEARLY_LOOKBACK_YEARS,
+)
+
+
+def _safe_candlestick_year(input, default=None):
+    """Read year select when mounted; default if absent (e.g. Hourly/Yearly view)."""
+    try:
+        return parse_year(input.candlestick_year())
+    except SilentException:
+        return default if default is not None else CURRENT_YEAR
+
+
+def _candlestick_period_params(input, timeframe: str):
+    """Only touch period inputs that exist for the active timeframe."""
+    year, month, day = CURRENT_YEAR, CURRENT_MONTH, None
+    if timeframe == "Hourly":
+        day = parse_day(input.candlestick_day())
+    elif timeframe == "Monthly":
+        year = parse_year(input.candlestick_year())
+    elif timeframe == "Daily":
+        year = parse_year(input.candlestick_year())
+        month = parse_month(input.candlestick_month())
+    return year, month, day
+
 
 # Import help menu module
 from HelpMenu import get_help_modal, QUICK_HELP_TIPS
@@ -1186,6 +1226,56 @@ app_ui = ui.page_fluid(
                 ui.output_ui("create_multipanel_plot_output")
             )
         ),
+        # Candlestick Tab
+        ui.nav_panel(
+            "Candlestick",
+            ui.input_select(
+                "candlestick_company",
+                "Select company:",
+                choices=CANDLESTICK_COMPANIES,
+                selected="Tesla",
+            ),
+            ui.input_select(
+                "candlestick_timeframe",
+                "Select timeframe:",
+                choices=CANDLESTICK_TIMEFRAMES,
+                selected="Daily",
+            ),
+            ui.output_ui("candlestick_period_controls"),
+            ui.tags.p(
+                "Real OHLC from Yahoo Finance (~15 min delayed). "
+                "Hourly = past 7 days (pick a day). Daily = trading days in a month. "
+                "Monthly = 12 months ending on today's date each year. "
+                "Yearly = 10 years ending today (e.g. May 20, 2017 – May 20, 2026). "
+                "Future dates are not offered in any dropdown.",
+                class_="text-muted small",
+                style="margin: 0 0 8px 12px;",
+            ),
+            ui.tags.main(
+                {"role": "main", "aria-label": "Main content"},
+                ui.div(
+                    ui.input_action_button(
+                        "download_graphics_candlestick",
+                        "Download Graph in svg",
+                        class_="btn btn-primary",
+                    ),
+                    ui.input_action_button(
+                        "download_html_candlestick",
+                        "Download Multimodal Plot in html",
+                        class_="btn btn-secondary",
+                    ),
+                    ui.input_action_button(
+                        "embed_code_button_candlestick",
+                        "Embed Code",
+                        class_="btn btn-success",
+                        aria_label="Get embed code for your website",
+                    ),
+                    class_="text-center mb-3",
+                    style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;",
+                ),
+                ui.output_ui("create_candlestick_output"),
+            ),
+        ),
     ),
     # Footer
     ui.tags.footer(
@@ -1349,6 +1439,11 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.embed_code_button_multipanel)
     async def embed_code_button_multipanel_clicked():
+        await handle_embed_code_generation()
+
+    @reactive.effect
+    @reactive.event(input.embed_code_button_candlestick)
+    async def embed_code_button_candlestick_clicked():
         await handle_embed_code_generation()
 
     
@@ -1517,8 +1612,10 @@ def server(input, output, session):
     async def download_html_multipanel_clicked():
         await trigger_html_download("multipanel")
 
-    
-    
+    @reactive.effect
+    @reactive.event(input.download_html_candlestick)
+    async def download_html_candlestick_clicked():
+        await trigger_html_download("candlestick")
 
     # Add remaining reactive effects and output functions here
     
@@ -1730,8 +1827,91 @@ def server(input, output, session):
             import traceback
             traceback.print_exc()
             return None
-    
-    
+
+    @output
+    @render.ui
+    def candlestick_period_controls():
+        """Period selectors; only dates on or before today are available."""
+        tf = input.candlestick_timeframe()
+        if tf == "Yearly":
+            start = _anniversary_on_year(CURRENT_YEAR - YEARLY_LOOKBACK_YEARS)
+            return ui.tags.p(
+                f"Yearly view: {start.strftime('%B %d, %Y')} – {TODAY.strftime('%B %d, %Y')} "
+                f"({YEARLY_LOOKBACK_YEARS} years, anchored on today's date).",
+                class_="text-muted small",
+                style="margin: 0 0 8px 12px;",
+            )
+        if tf == "Hourly":
+            return ui.input_select(
+                "candlestick_day",
+                "Select day (past 7 days):",
+                choices=build_hourly_day_choices(),
+                selected=get_hourly_day_default(),
+            )
+        year = _safe_candlestick_year(input)
+        controls = [
+            ui.input_select(
+                "candlestick_year",
+                "Select year:",
+                choices=CANDLESTICK_YEARS,
+                selected=str(year),
+            ),
+        ]
+        if tf == "Daily":
+            month_names = get_available_month_names(year)
+            default_month = get_default_month_for_year(year)
+            controls.append(
+                ui.input_select(
+                    "candlestick_month",
+                    "Select month:",
+                    choices=month_names,
+                    selected=default_month,
+                )
+            )
+        elif tf == "Monthly":
+            ann = _anniversary_on_year(year)
+            prev = _anniversary_on_year(year - 1)
+            end = min(ann, TODAY)
+            controls.append(
+                ui.tags.p(
+                    f"Monthly view for {year}: {prev.strftime('%B %d, %Y')} – "
+                    f"{end.strftime('%B %d, %Y')} (anchored on today's date).",
+                    class_="text-muted small",
+                    style="margin: 4px 0 8px 12px;",
+                )
+            )
+        return ui.div(*controls)
+
+    # Candlestick rendering (live Yahoo Finance data via yfinance)
+    @output
+    @render_maidr
+    def create_candlestick_output():
+        """Create and render MAIDR-compatible candlestick plot"""
+        try:
+            timeframe = input.candlestick_timeframe()
+            year, month, day = _candlestick_period_params(input, timeframe)
+            ax = create_candlestick(
+                input.candlestick_company(),
+                timeframe,
+                input.theme(),
+                year=year,
+                month=month,
+                day=day,
+            )
+            if ax is not None:
+                if isinstance(ax, list):
+                    print(f"ERROR: create_candlestick returned a list instead of axes: {type(ax)}")
+                    return None
+                fig = ax.figure
+                current_figure.set(fig)
+                return ax
+        except SilentException:
+            raise
+        except Exception as e:
+            print(f"Error creating candlestick: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     # File upload handling
     @reactive.effect
@@ -2047,8 +2227,10 @@ def server(input, output, session):
     async def download_graphics_multipanel_clicked():
         await trigger_svg_download("multipanel")
 
-    
-    
+    @reactive.effect
+    @reactive.event(input.download_graphics_candlestick)
+    async def download_graphics_candlestick_clicked():
+        await trigger_svg_download("candlestick")
 
     # Add reactive effects to announce changes to screen readers
     @reactive.effect
@@ -2080,6 +2262,33 @@ def server(input, output, session):
         scatter_color = input.scatter_color()
         if scatterplot_type and scatter_color:
             await announce_to_screen_reader(f"Scatter plot settings updated: {scatterplot_type} with {scatter_color} colors")
+
+    @reactive.effect
+    async def announce_candlestick_changes():
+        company = input.candlestick_company()
+        timeframe = input.candlestick_timeframe()
+        if company and timeframe:
+            extra = ""
+            if timeframe == "Yearly":
+                extra = f", last {YEARLY_LOOKBACK_YEARS} years to today"
+            elif timeframe == "Hourly":
+                try:
+                    extra = f", {parse_day(input.candlestick_day())}"
+                except SilentException:
+                    pass
+            elif timeframe == "Monthly":
+                extra = f", year {_safe_candlestick_year(input)}"
+            elif timeframe == "Daily":
+                try:
+                    extra = (
+                        f", {parse_month(input.candlestick_month())}/"
+                        f"{parse_year(input.candlestick_year())}"
+                    )
+                except SilentException:
+                    pass
+            await announce_to_screen_reader(
+                f"Candlestick updated: {company}, {timeframe} view{extra}. Loading Yahoo Finance data."
+            )
 
     # Add reactive effect to update button states
     @reactive.effect
