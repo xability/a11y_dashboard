@@ -145,45 +145,23 @@ from plots.heatmap import create_heatmap, create_custom_heatmap
 from plots.multilineplot import generate_multiline_data, create_multiline_plot, create_custom_multiline_plot
 from plots.multilayerplot import create_multilayer_plot, create_custom_multilayer_plot
 from plots.multipanelplot import create_multipanel_plot, create_custom_multipanel_plot
+from typing import List
 from plots.candlestick import (
     create_candlestick,
-    parse_month,
-    parse_year,
-    parse_day,
-    CANDLESTICK_COMPANIES,
-    CANDLESTICK_TIMEFRAMES,
-    CANDLESTICK_YEARS,
-    get_available_month_names,
-    get_default_month_for_year,
-    build_hourly_day_choices,
-    get_hourly_day_default,
-    CURRENT_YEAR,
-    CURRENT_MONTH,
-    TODAY,
-    _anniversary_on_year,
-    YEARLY_LOOKBACK_YEARS,
+    resolve_symbol,
+    ma_period_choices,
+    SYMBOL_CHOICES,
+    CANDLESTICK_RANGE_CHOICES,
+    MA_MIN_PERIOD,
 )
 
 
-def _safe_candlestick_year(input, default=None):
-    """Read year select when mounted; default if absent (e.g. Hourly/Yearly view)."""
+def _parse_candlestick_ma_input(input) -> List[int]:
+    """Read MA period(s) from dropdown (values are already limited to valid range)."""
     try:
-        return parse_year(input.candlestick_year())
-    except SilentException:
-        return default if default is not None else CURRENT_YEAR
-
-
-def _candlestick_period_params(input, timeframe: str):
-    """Only touch period inputs that exist for the active timeframe."""
-    year, month, day = CURRENT_YEAR, CURRENT_MONTH, None
-    if timeframe == "Hourly":
-        day = parse_day(input.candlestick_day())
-    elif timeframe == "Monthly":
-        year = parse_year(input.candlestick_year())
-    elif timeframe == "Daily":
-        year = parse_year(input.candlestick_year())
-        month = parse_month(input.candlestick_month())
-    return year, month, day
+        return [int(p) for p in (input.candlestick_ma_periods() or [])]
+    except (SilentException, TypeError, ValueError):
+        return []
 
 
 # Import help menu module
@@ -1229,25 +1207,23 @@ app_ui = ui.page_fluid(
         # Candlestick Tab
         ui.nav_panel(
             "Candlestick",
-            ui.input_select(
-                "candlestick_company",
-                "Select company:",
-                choices=CANDLESTICK_COMPANIES,
-                selected="Tesla",
+            ui.input_selectize(
+                "candlestick_symbol",
+                "Symbol (search or type ticker):",
+                choices=SYMBOL_CHOICES,
+                selected="AAPL",
+                options={"create": True, "persist": False, "maxItems": 1},
             ),
             ui.input_select(
-                "candlestick_timeframe",
-                "Select timeframe:",
-                choices=CANDLESTICK_TIMEFRAMES,
-                selected="Daily",
+                "candlestick_range",
+                "Range:",
+                choices=CANDLESTICK_RANGE_CHOICES,
+                selected="1M",
             ),
-            ui.output_ui("candlestick_period_controls"),
             ui.tags.p(
                 "Real OHLC from Yahoo Finance (~15 min delayed). "
-                "Hourly = past 7 days (pick a day). Daily = trading days in a month. "
-                "Monthly = 12 months ending on today's date each year. "
-                "Yearly = 10 years ending today (e.g. May 20, 2017 – May 20, 2026). "
-                "Future dates are not offered in any dropdown.",
+                "Pick a symbol and time range (e.g. past 24 hours, past week). "
+                "Moving averages can be added after the chart loads.",
                 class_="text-muted small",
                 style="margin: 0 0 8px 12px;",
             ),
@@ -1274,6 +1250,7 @@ app_ui = ui.page_fluid(
                     style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;",
                 ),
                 ui.output_ui("create_candlestick_output"),
+                ui.output_ui("candlestick_ma_controls"),
             ),
         ),
     ),
@@ -1828,59 +1805,27 @@ def server(input, output, session):
             traceback.print_exc()
             return None
 
+    candlestick_n_bars = reactive.Value(0)
+
     @output
     @render.ui
-    def candlestick_period_controls():
-        """Period selectors; only dates on or before today are available."""
-        tf = input.candlestick_timeframe()
-        if tf == "Yearly":
-            start = _anniversary_on_year(CURRENT_YEAR - YEARLY_LOOKBACK_YEARS)
-            return ui.tags.p(
-                f"Yearly view: {start.strftime('%B %d, %Y')} – {TODAY.strftime('%B %d, %Y')} "
-                f"({YEARLY_LOOKBACK_YEARS} years, anchored on today's date).",
-                class_="text-muted small",
-                style="margin: 0 0 8px 12px;",
-            )
-        if tf == "Hourly":
-            return ui.input_select(
-                "candlestick_day",
-                "Select day (past 7 days):",
-                choices=build_hourly_day_choices(),
-                selected=get_hourly_day_default(),
-            )
-        year = _safe_candlestick_year(input)
-        controls = [
-            ui.input_select(
-                "candlestick_year",
-                "Select year:",
-                choices=CANDLESTICK_YEARS,
-                selected=str(year),
+    def candlestick_ma_controls():
+        """MA dropdown appears only after a chart with enough bars is available."""
+        n = candlestick_n_bars.get()
+        choices = ma_period_choices(n)
+        if not choices:
+            return None
+        return ui.div(
+            ui.input_selectize(
+                "candlestick_ma_periods",
+                f"Add moving average (optional, {MA_MIN_PERIOD}–{n} bars):",
+                choices=choices,
+                selected=[],
+                multiple=True,
             ),
-        ]
-        if tf == "Daily":
-            month_names = get_available_month_names(year)
-            default_month = get_default_month_for_year(year)
-            controls.append(
-                ui.input_select(
-                    "candlestick_month",
-                    "Select month:",
-                    choices=month_names,
-                    selected=default_month,
-                )
-            )
-        elif tf == "Monthly":
-            ann = _anniversary_on_year(year)
-            prev = _anniversary_on_year(year - 1)
-            end = min(ann, TODAY)
-            controls.append(
-                ui.tags.p(
-                    f"Monthly view for {year}: {prev.strftime('%B %d, %Y')} – "
-                    f"{end.strftime('%B %d, %Y')} (anchored on today's date).",
-                    class_="text-muted small",
-                    style="margin: 4px 0 8px 12px;",
-                )
-            )
-        return ui.div(*controls)
+            class_="mb-2",
+            style="margin: 0 0 8px 12px;",
+        )
 
     # Candlestick rendering (live Yahoo Finance data via yfinance)
     @output
@@ -1888,16 +1833,14 @@ def server(input, output, session):
     def create_candlestick_output():
         """Create and render MAIDR-compatible candlestick plot"""
         try:
-            timeframe = input.candlestick_timeframe()
-            year, month, day = _candlestick_period_params(input, timeframe)
-            ax = create_candlestick(
-                input.candlestick_company(),
-                timeframe,
-                input.theme(),
-                year=year,
-                month=month,
-                day=day,
+            symbol = input.candlestick_symbol()
+            range_key = input.candlestick_range()
+            theme = input.theme()
+            ma_periods = _parse_candlestick_ma_input(input)
+            ax, n_bars, _ = create_candlestick(
+                symbol, range_key, theme, ma_periods=ma_periods,
             )
+            candlestick_n_bars.set(n_bars)
             if ax is not None:
                 if isinstance(ax, list):
                     print(f"ERROR: create_candlestick returned a list instead of axes: {type(ax)}")
@@ -1908,6 +1851,7 @@ def server(input, output, session):
         except SilentException:
             raise
         except Exception as e:
+            candlestick_n_bars.set(0)
             print(f"Error creating candlestick: {e}")
             import traceback
             traceback.print_exc()
@@ -2265,29 +2209,19 @@ def server(input, output, session):
 
     @reactive.effect
     async def announce_candlestick_changes():
-        company = input.candlestick_company()
-        timeframe = input.candlestick_timeframe()
-        if company and timeframe:
-            extra = ""
-            if timeframe == "Yearly":
-                extra = f", last {YEARLY_LOOKBACK_YEARS} years to today"
-            elif timeframe == "Hourly":
-                try:
-                    extra = f", {parse_day(input.candlestick_day())}"
-                except SilentException:
-                    pass
-            elif timeframe == "Monthly":
-                extra = f", year {_safe_candlestick_year(input)}"
-            elif timeframe == "Daily":
-                try:
-                    extra = (
-                        f", {parse_month(input.candlestick_month())}/"
-                        f"{parse_year(input.candlestick_year())}"
-                    )
-                except SilentException:
-                    pass
+        symbol = input.candlestick_symbol()
+        range_key = input.candlestick_range()
+        if symbol and range_key:
+            ticker = resolve_symbol(symbol)
+            ma_note = ""
+            try:
+                if input.candlestick_ma_periods():
+                    ma_note = " with moving averages"
+            except SilentException:
+                pass
+            range_label = CANDLESTICK_RANGE_CHOICES.get(range_key, range_key)
             await announce_to_screen_reader(
-                f"Candlestick updated: {company}, {timeframe} view{extra}. Loading Yahoo Finance data."
+                f"Candlestick updated: {ticker}, {range_label}{ma_note}. Loading Yahoo Finance data."
             )
 
     # Add reactive effect to update button states
